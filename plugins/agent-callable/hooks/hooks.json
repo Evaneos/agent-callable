@@ -1,0 +1,17 @@
+{
+  "description": "Validates Bash commands against a deny-by-default policy before execution",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/audit-bash.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

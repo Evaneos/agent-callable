@@ -1,0 +1,27 @@
+{
+  "name": "agent-callable",
+  "owner": {
+    "name": "Platform Team",
+    "email": "820504+grams@users.noreply.github.com"
+  },
+  "plugins": [
+    {
+      "name": "agent-callable",
+      "source": "./plugins/agent-callable",
+      "description": "PreToolUse hook — validates Bash commands through agent-callable deny-by-default policy before execution",
+      "version": "0.12.2",
+      "author": {
+        "name": "Platform Team",
+        "email": "820504+grams@users.noreply.github.com"
+      },
+      "tags": [
+        "security",
+        "readonly",
+        "bash",
+        "hook",
+        "cli-wrapper",
+        "prompt"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# Documentation: https://goreleaser.com
+---
+version: 2
+
+project_name: agent-callable
+
+before:
+  hooks:
+    - "sh -c 'v=$(jq -r .version plugins/agent-callable/.claude-plugin/plugin.json); [ \"$v\" = \"{{.Version}}\" ] || { echo \"ERROR: tag {{.Version}} != plugin.json $v\" >&2; exit 1; }'"
+    - go mod tidy
+
+builds:
+  - id: agent-callable
+    main: ./cmd/agent-callable
+    binary: agent-callable
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: Evaneos
+    name: agent-callable
+  draft: false
+  prerelease: auto
+  mode: replace
+  footer: |
+    ## Installation
+
+    Download the archive matching your platform below, or build from source (`make install`).

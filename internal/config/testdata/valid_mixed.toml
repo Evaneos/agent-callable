@@ -1,0 +1,8 @@
+[grep]
+allowed = ["*"]
+
+[sed]
+allowed = ["*"]
+
+[systemctl]
+allowed = ["is-active", "is-enabled", "list-units", "status"]
