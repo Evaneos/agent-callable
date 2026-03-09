@@ -1,0 +1,115 @@
+agent-callable: Custom tool configuration format
+================================================
+
+Config files are TOML files placed in:
+  1. $AGENT_CALLABLE_CONFIG_DIR/tools.d/*.toml  (env override, for CI/tests)
+  2. $XDG_CONFIG_HOME/agent-callable/tools.d/*.toml  (default: ~/.config/...)
+
+Each file defines tools as [toolname] sections. Built-in tools (when enabled) take precedence.
+
+Global settings go in config.toml (not tools.d/):
+  $AGENT_CALLABLE_CONFIG_DIR/config.toml or ~/.config/agent-callable/config.toml
+
+Format
+------
+
+  # All arguments allowed
+  [grep]
+  allowed = ["*"]
+
+  # Only specific subcommands allowed
+  [systemctl]
+  allowed = ["is-active", "is-enabled", "list-units", "status"]
+
+  # Nested subcommand restrictions
+  [nmcli]
+  allowed = ["g", "general", "c", "connection", "d", "device"]
+  flags_with_value = ["-f", "--fields"]
+  [nmcli.subcommands]
+  g = ["status", "hostname"]
+  general = ["status", "hostname"]
+  c = ["show", "monitor"]
+  connection = ["show", "monitor"]
+  d = ["status", "show"]
+  device = ["status", "show"]
+
+  # Conditional write checking (only when a write flag is present)
+  [sed]
+  allowed = ["*"]
+  write_flags = ["-i", "--in-place"]
+  write_target = "last"
+  flags_with_value = ["-e", "-f", "--expression", "--file"]
+  # sed 's/foo/bar/' /etc/hosts      → allowed (read-only, no -i)
+  # sed -i 's/foo/bar/' /tmp/file    → allowed (write to writable dir)
+  # sed -i 's/foo/bar/' /etc/hosts   → blocked (write outside writable dir)
+
+  # Environment overrides (applied when command is allowed)
+  [git]
+  allowed = ["status", "log", "diff"]
+  [git.env]
+  GIT_TERMINAL_PROMPT = "0"
+
+Fields (inside [toolname])
+--------------------------
+
+  allowed          (string[], required)  Subcommands to allow, or ["*"] for all
+  flags_with_value (string[])  Flags that consume the next argument
+  write_target     (string)    Check write destination against writable_dirs:
+                               "last" = last positional arg (cp, mv, ln)
+                               "all"  = all positional args (mkdir, touch, tee)
+  write_flags      (string[])  Only enforce write_target when one of these flags
+                               is present. Without write_flags, write_target is
+                               always enforced. Requires write_target to be set.
+                               Short flags match by prefix: "-i" matches -i, -i.bak
+                               Long flags match exactly or with =: "--fix" matches
+                               --fix and --fix=true.
+  [toolname.env]       (table)     Environment overrides applied when allowed
+  [toolname.subcommands] (table)   Second-level subcommand allowlists
+
+Modes
+-----
+
+  allowed = ["*"]                   → All arguments allowed
+  allowed = ["sub1", "sub2"]        → Flat: first positional must be in allowed
+  allowed + [toolname.subcommands]  → Nested: first arg in allowed, second checked
+                                      against subcommands[cmd] if the key exists,
+                                      otherwise flat-allowed for that command
+
+Global config (config.toml)
+---------------------------
+
+  writable_dirs = ["/tmp"]     Directories where the agent can write:
+                               - --sh mode: > and >> redirects
+                               - docker run: read-write bind mounts
+                               - tools with write_target: destination args
+                               /dev/null is always allowed (hardcoded).
+
+  [audit]                      Audit trail (disabled by default).
+  file = "/path/to/audit.log"  Log file path.
+  mode = "none"                "none" (disabled), "blocked", "allowed", or "all".
+  include_audit_checks = false Log --audit and --claude checks (validation-only calls
+                               that don't execute the command).
+
+  [builtins]                   Enable/disable built-in tools (Go-implemented).
+  kubectl = true               Set to true to enable, false to disable.
+  git = false                  Applies to: kubectl, git, gh, docker, npm,
+                               pulumi, gcloud. Only entries set to true are
+                               enabled (deny-by-default).
+
+Validation rules
+----------------
+
+  - Tool name (section key) must match ^[a-zA-Z0-9._-]+$
+  - allowed is required: use ["*"] for unrestricted, or a list of subcommands
+  - allowed = ["*"] cannot be mixed with other values
+  - Keys of [toolname.subcommands] must be a subset of allowed
+  - Each entry in flags_with_value must start with -
+  - Each entry in write_flags must start with -
+  - write_flags requires write_target to be set
+  - Invalid configs produce a stderr warning; the tool is not registered
+
+Quick start
+-----------
+
+  agent-callable --init-config           Generate default configs for common tools
+  agent-callable --list-tools           List all registered tools (built-in + config)

@@ -1,0 +1,18 @@
+[nmcli]
+allowed = [
+  "g", "general",
+  "c", "connection",
+  "d", "device",
+  "r", "radio",
+]
+flags_with_value = ["-f", "--fields"]
+
+[nmcli.subcommands]
+g = ["status", "hostname"]
+general = ["status", "hostname"]
+c = ["show", "monitor"]
+connection = ["show", "monitor"]
+d = ["status", "show"]
+device = ["status", "show"]
+r = ["wifi"]
+radio = ["wifi"]

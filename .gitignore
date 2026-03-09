@@ -1,0 +1,15 @@
+# Binaires
+/agent-callable
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+
+# Implementation plans (local only)
+docs/plans/

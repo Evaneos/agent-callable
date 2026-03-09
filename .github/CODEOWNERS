@@ -1,0 +1,4 @@
+# Code owners for agent-callable
+# Ces utilisateurs seront automatiquement ajoutés en reviewers sur les PRs
+
+* @grams @Evaneos/owned-by-platform-team
