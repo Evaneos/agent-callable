@@ -181,8 +181,10 @@ Built-in tools always take priority over config files.
 writable_dirs = ["/tmp"]     # enforced on: redirects, docker volumes, write_target tools
 
 [audit]
-file = "/tmp/agent-callable-audit.log"
-mode = "none"  # "none", "blocked", "allowed", "all"
+file = "~/.local/share/agent-callable/audit.log"  # parent dir auto-created
+mode = "none"           # "none", "blocked", "allowed", "all"
+max_entries = 10000     # oldest trimmed on open (0 = unlimited)
+mask_secrets = true     # mask tokens, passwords, env vars in logged commands
 ```
 
 ---

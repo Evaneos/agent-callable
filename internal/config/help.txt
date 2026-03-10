@@ -85,8 +85,10 @@ Global config (config.toml)
                                /dev/null is always allowed (hardcoded).
 
   [audit]                      Audit trail (disabled by default).
-  file = "/path/to/audit.log"  Log file path.
+  file = "/path/to/audit.log"  Log file path (parent dir created automatically).
   mode = "none"                "none" (disabled), "blocked", "allowed", or "all".
+  max_entries = 10000          Max log lines kept; oldest are trimmed (0 = unlimited).
+  mask_secrets = true          Mask sensitive values (tokens, passwords, env vars).
   include_audit_checks = false Log --audit and --claude checks (validation-only calls
                                that don't execute the command).
 
