@@ -72,10 +72,11 @@ func New(gc *config.GlobalConfig, cfgs []config.ConfigTool) *Engine {
 		builtins[name] = true
 	}
 
-	// Config-driven tools (default TOML + user-defined, skip if same name as builtin)
+	// Config-driven tools (default TOML + user-defined, override builtin if same name)
 	for _, cfg := range cfgs {
-		if builtins[strings.ToLower(cfg.ToolConfig.Name)] {
-			continue
+		name := strings.ToLower(cfg.ToolConfig.Name)
+		if builtins[name] {
+			r.Unregister(name)
 		}
 		r.Register(cfg.ToToolSpec(gc.WritableDirs))
 	}

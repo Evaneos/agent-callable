@@ -496,3 +496,41 @@ func TestWrapperBuiltinsInAllBuiltins(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigOverridesBuiltin(t *testing.T) {
+	// A TOML config for "npm" should override the Go builtin.
+	// The builtin blocks "npm install" without --ignore-scripts,
+	// but our TOML override allows all subcommands.
+	npmCfg := config.ConfigTool{
+		ToolConfig: config.ToolConfig{
+			Name:    "npm",
+			Allowed: []string{"*"},
+		},
+		AllowAll: true,
+	}
+	gc := &config.GlobalConfig{Builtins: allBuiltinsEnabled()}
+	e := New(gc, []config.ConfigTool{npmCfg})
+
+	// With the builtin, this would be blocked. With TOML override, it's allowed.
+	cr := e.Check([]string{"npm", "install"})
+	if !cr.Allowed {
+		t.Fatalf("expected TOML override to allow npm install, got blocked: %s", cr.Reason)
+	}
+}
+
+func TestConfigOverrideStillRespectsBuiiltinToggle(t *testing.T) {
+	// Even with a TOML override, disabling the builtin in [builtins] should unregister it.
+	npmCfg := config.ConfigTool{
+		ToolConfig: config.ToolConfig{
+			Name:    "npm",
+			Allowed: []string{"*"},
+		},
+		AllowAll: true,
+	}
+	gc := &config.GlobalConfig{Builtins: map[string]bool{"git": true}}
+	e := New(gc, []config.ConfigTool{npmCfg})
+
+	if _, ok := e.reg.Get("npm"); ok {
+		t.Fatal("expected npm to be unregistered when not in [builtins]")
+	}
+}
