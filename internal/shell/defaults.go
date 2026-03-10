@@ -98,14 +98,9 @@ write_target = "all"
 [touch]
 allowed = ["*"]
 write_target = "all"
-[tar]
+[chmod]
 allowed = ["*"]
-[gunzip]
-allowed = ["*"]
-[gzip]
-allowed = ["*"]
-[unzip]
-allowed = ["*"]
+write_target = "last"
 `,
 
 	"network.toml": `[curl]
@@ -269,6 +264,9 @@ allowed = ["*"]
 	"typescript.toml": `[tsc]
 allowed = ["*"]
 
+[npx]
+allowed = ["tsc", "eslint", "prettier", "jest", "vitest", "tsx"]
+
 [eslint]
 allowed = ["*"]
 write_flags = ["--fix"]
@@ -305,6 +303,7 @@ allowed = ["*"]
 
 [uv]
 allowed = ["run", "sync", "lock", "venv", "version", "python", "pip"]
+flags_with_value = ["--group", "--extra", "--python", "--directory", "--project"]
 [uv.subcommands]
 run = ["pytest", "mypy", "pyright", "ty", "ruff", "black", "isort", "pylint", "flake8", "bandit", "pip-audit"]
 python = ["list", "find", "pin"]
@@ -340,12 +339,23 @@ allowed = ["list"]
 `,
 }
 
-const defaultGlobalConfigAudit = `
+// auditConfigBlock returns the [audit] TOML block with a XDG-based default path.
+func auditConfigBlock() string {
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" {
+		home, _ := os.UserHomeDir()
+		dataHome = filepath.Join(home, ".local", "share")
+	}
+	auditFile := filepath.Join(dataHome, "agent-callable", "audit.log")
+	return fmt.Sprintf(`
 [audit]
-file = "/tmp/agent-callable-audit.log"
+file = %q
 mode = "none"  # "none" (disabled), "blocked", "allowed", "all"
+max_entries = 10000  # 0 = unlimited
+mask_secrets = true
 # include_audit_checks = false
-`
+`, auditFile)
+}
 
 // ConfigCategory groups related config files under a user-facing label.
 type ConfigCategory struct {
@@ -375,7 +385,7 @@ var Categories = []ConfigCategory{
 	},
 	{
 		Label: "Filesystem (write)",
-		Desc:  "cp, ln, mkdir, mv, tee, touch (writable_dirs enforced), tar, gzip, unzip",
+		Desc:  "cp, ln, mkdir, mv, tee, touch, chmod (writable_dirs enforced)",
 		Files: []string{"filesystem-write.toml"},
 	},
 	{
@@ -422,7 +432,7 @@ var Categories = []ConfigCategory{
 	},
 	{
 		Label:    "Node.js",
-		Desc:     "npm, tsc, eslint, prettier",
+		Desc:     "npm, npx, tsc, eslint, prettier",
 		Files:    []string{"typescript.toml"},
 		Builtins: []string{"npm"},
 	},
@@ -510,7 +520,7 @@ func buildGlobalConfig(writableDirs []string, disabledBuiltins map[string]bool) 
 		quoted[i] = fmt.Sprintf("%q", d)
 	}
 	fmt.Fprintf(&b, "writable_dirs = [%s]\n", strings.Join(quoted, ", "))
-	b.WriteString(defaultGlobalConfigAudit)
+	b.WriteString(auditConfigBlock())
 	b.WriteString("\n[builtins]\n")
 
 	for _, name := range AllBuiltins() {

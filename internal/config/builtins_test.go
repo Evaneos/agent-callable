@@ -755,11 +755,12 @@ func TestDefaultTeeWriteTargetBlocked(t *testing.T) {
 	spectest.AssertBlocked(t, tool, []string{"/etc/passwd"})
 }
 
-// --- tar, gzip, unzip (no write_target) ---
+// --- chmod (write_target = last) ---
 
-func TestDefaultTarNoWriteTarget(t *testing.T) {
-	tool := loadDefaultToolWithDirs(t, "tar", []string{"/tmp"})
-	spectest.AssertAllowed(t, tool, []string{"-xf", "/etc/archive.tar"})
+func TestDefaultChmodWriteTarget(t *testing.T) {
+	tool := loadDefaultToolWithDirs(t, "chmod", []string{"/tmp"})
+	spectest.AssertAllowed(t, tool, []string{"+x", "/tmp/script.sh"})
+	spectest.AssertBlocked(t, tool, []string{"777", "/etc/passwd"})
 }
 
 // --- tsc (allow_all in typescript.toml) ---
@@ -774,5 +775,30 @@ func TestDefaultTscAllowsAnyArgs(t *testing.T) {
 		{},
 	}
 	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+// --- npx (restricted allowlist in typescript.toml) ---
+
+func TestDefaultNpxAllowsSafeTools(t *testing.T) {
+	tool := loadDefaultTool(t, "npx")
+	allowed := [][]string{
+		{"tsc", "--noEmit"},
+		{"eslint", "."},
+		{"prettier", "--check", "."},
+		{"jest"},
+		{"vitest"},
+		{"tsx", "script.ts"},
+	}
+	spectest.AssertAllowedBatch(t, tool, allowed)
+}
+
+func TestDefaultNpxBlocksArbitrary(t *testing.T) {
+	tool := loadDefaultTool(t, "npx")
+	blocked := [][]string{
+		{"rimraf", "dist"},
+		{"cowsay", "hello"},
+		{"ts-node", "script.ts"},
+	}
+	spectest.AssertBlockedBatch(t, tool, blocked)
 }
 
