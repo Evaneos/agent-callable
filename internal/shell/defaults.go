@@ -292,6 +292,13 @@ allowed = ["test", "build", "vet", "fmt", "mod", "generate", "doc", "version", "
 allowed = ["check", "build"]
 `,
 
+	"rust.toml": `[cargo]
+allowed = ["build", "check", "test", "clippy", "fmt", "doc", "bench", "clean", "update", "metadata", "tree", "version"]
+
+[rustc]
+allowed = ["*"]
+`,
+
 	"python.toml": `[ruff]
 allowed = ["*"]
 write_flags = ["--fix", "--fix-only"]
@@ -440,6 +447,11 @@ var Categories = []ConfigCategory{
 		Label: "Go",
 		Desc:  "go test/build/vet/mod/..., gofmt, goreleaser (check/build)",
 		Files: []string{"go.toml"},
+	},
+	{
+		Label: "Rust",
+		Desc:  "cargo build/check/test/clippy/..., rustc",
+		Files: []string{"rust.toml"},
 	},
 	{
 		Label: "Python",

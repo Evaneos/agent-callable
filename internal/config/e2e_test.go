@@ -283,6 +283,56 @@ func TestE2EWriteFlagsInPlaceAllowedInWritableDir(t *testing.T) {
 	}
 }
 
+// --- Rust tools ---
+
+const cargoTOML = `[cargo]
+allowed = ["build", "check", "test", "clippy", "fmt", "doc", "bench", "clean", "update", "metadata", "tree", "version"]
+`
+
+func TestE2ECargoAllowedSubcommands(t *testing.T) {
+	for _, sub := range []string{"build", "check", "test", "clippy", "fmt", "doc", "bench", "clean", "update", "metadata", "tree", "version"} {
+		t.Run(sub, func(t *testing.T) {
+			_, tool := setupE2ETool(t, cargoTOML, nil)
+			result := tool.Check([]string{sub}, runtimeCtx())
+			if result.Decision != spec.DecisionAllow {
+				t.Errorf("expected allow for 'cargo %s', got deny: %s", sub, result.Reason)
+			}
+		})
+	}
+}
+
+func TestE2ECargoBlockedSubcommands(t *testing.T) {
+	for _, sub := range []string{"run", "install", "publish", "login", "owner", "yank"} {
+		t.Run(sub, func(t *testing.T) {
+			_, tool := setupE2ETool(t, cargoTOML, nil)
+			result := tool.Check([]string{sub}, runtimeCtx())
+			if result.Decision == spec.DecisionAllow {
+				t.Errorf("expected deny for 'cargo %s'", sub)
+			}
+		})
+	}
+}
+
+const rustcTOML = `[rustc]
+allowed = ["*"]
+`
+
+func TestE2ERustcAllowed(t *testing.T) {
+	_, tool := setupE2ETool(t, rustcTOML, nil)
+	result := tool.Check([]string{"--version"}, runtimeCtx())
+	if result.Decision != spec.DecisionAllow {
+		t.Errorf("expected allow for 'rustc --version', got deny: %s", result.Reason)
+	}
+}
+
+func TestE2ERustcArbitraryArgs(t *testing.T) {
+	_, tool := setupE2ETool(t, rustcTOML, nil)
+	result := tool.Check([]string{"main.rs", "-o", "main"}, runtimeCtx())
+	if result.Decision != spec.DecisionAllow {
+		t.Errorf("expected allow for 'rustc main.rs -o main', got deny: %s", result.Reason)
+	}
+}
+
 // --- Config resolution tests ---
 
 func TestConfigBaseDirFallbackToXDG(t *testing.T) {
