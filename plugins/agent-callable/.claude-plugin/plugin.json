@@ -1,7 +1,7 @@
 {
   "name": "agent-callable",
   "description": "PreToolUse hook — automatically validates Bash commands against a deny-by-default policy before execution",
-  "version": "0.12.2",
+  "version": "0.13.0",
   "author": {
     "name": "Platform Team",
     "email": "820504+grams@users.noreply.github.com"
