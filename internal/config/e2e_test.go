@@ -384,6 +384,84 @@ func TestE2EFlyBlockedSubcommands(t *testing.T) {
 	}
 }
 
+// --- Terraform ---
+
+const terraformTOML = `[terraform]
+allowed = ["fmt", "get", "graph", "init", "output", "plan", "providers", "show", "state", "validate", "version", "workspace"]
+flags_with_value = ["-chdir", "-var", "-var-file", "-target", "-out", "-state", "-backup", "-lock-timeout", "-parallelism", "-plugin-dir"]
+[terraform.subcommands]
+providers = ["schema"]
+state = ["list", "show", "pull"]
+workspace = ["list", "show"]
+`
+
+func TestE2ETerraformAllowedSubcommands(t *testing.T) {
+	for _, args := range [][]string{
+		{"fmt"},
+		{"get"},
+		{"graph"},
+		{"init"},
+		{"output"},
+		{"plan"},
+		{"plan", "-out=plan.tfplan"},
+		{"plan", "-var", "foo=bar"},
+		{"providers", "schema"},
+		{"show"},
+		{"state", "list"},
+		{"state", "show", "aws_instance.foo"},
+		{"state", "pull"},
+		{"validate"},
+		{"version"},
+		{"workspace", "list"},
+		{"workspace", "show"},
+		{"-chdir=/some/dir", "plan"},
+	} {
+		label := strings.Join(args, " ")
+		t.Run(label, func(t *testing.T) {
+			_, tool := setupE2ETool(t, terraformTOML, nil)
+			result := tool.Check(args, runtimeCtx())
+			if result.Decision != spec.DecisionAllow {
+				t.Errorf("expected allow for 'terraform %s', got deny: %s", label, result.Reason)
+			}
+		})
+	}
+}
+
+func TestE2ETerraformBlockedSubcommands(t *testing.T) {
+	for _, args := range [][]string{
+		{"apply"},
+		{"apply", "plan.tfplan"},
+		{"destroy"},
+		{"import", "aws_instance.foo", "i-1234"},
+		{"taint", "aws_instance.foo"},
+		{"untaint", "aws_instance.foo"},
+		{"refresh"},
+		{"console"},
+		{"login"},
+		{"logout"},
+		{"force-unlock", "LOCK_ID"},
+		{"test"},
+		{"state", "mv", "a", "b"},
+		{"state", "rm", "aws_instance.foo"},
+		{"state", "push", "state.tfstate"},
+		{"state", "replace-provider", "a", "b"},
+		{"workspace", "new", "dev"},
+		{"workspace", "delete", "dev"},
+		{"workspace", "select", "dev"},
+		{"providers", "lock"},
+		{"providers", "mirror", "/tmp/mirror"},
+	} {
+		label := strings.Join(args, " ")
+		t.Run(label, func(t *testing.T) {
+			_, tool := setupE2ETool(t, terraformTOML, nil)
+			result := tool.Check(args, runtimeCtx())
+			if result.Decision == spec.DecisionAllow {
+				t.Errorf("expected deny for 'terraform %s'", label)
+			}
+		})
+	}
+}
+
 // --- Config resolution tests ---
 
 func TestConfigBaseDirFallbackToXDG(t *testing.T) {

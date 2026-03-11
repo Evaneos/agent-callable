@@ -349,6 +349,18 @@ allowed = ["list"]
 allowed = ["builds", "bs", "containers", "cs", "completion", "format-pipeline", "fp", "get-pipeline", "gp", "jobs", "js", "pipelines", "ps", "resource-versions", "rvs", "resources", "rs", "status", "targets", "ts", "teams", "userinfo", "validate-pipeline", "vp", "version", "volumes", "vs", "watch", "w", "workers", "ws"]
 flags_with_value = ["-t", "--target", "-p", "--pipeline", "-j", "--job", "-b", "--build", "-n", "--team-name", "-c", "--config"]
 `,
+
+	"terraform.toml": `[terraform]
+allowed = ["fmt", "get", "graph", "init", "output", "plan", "providers", "show", "state", "validate", "version", "workspace"]
+flags_with_value = ["-chdir", "-var", "-var-file", "-target", "-out", "-state", "-backup", "-lock-timeout", "-parallelism", "-plugin-dir"]
+[terraform.env]
+TF_INPUT = "false"
+TF_IN_AUTOMATION = "true"
+[terraform.subcommands]
+providers = ["schema"]
+state = ["list", "show", "pull"]
+workspace = ["list", "show"]
+`,
 }
 
 // auditConfigBlock returns the [audit] TOML block with a XDG-based default path.
@@ -429,8 +441,8 @@ var Categories = []ConfigCategory{
 	},
 	{
 		Label:    "Cloud & CI/CD",
-		Desc:     "gcloud, pulumi, fly (Concourse CI read-only)",
-		Files:    []string{"concourse.toml"},
+		Desc:     "gcloud, pulumi, fly (Concourse), terraform (plan/validate/show)",
+		Files:    []string{"concourse.toml", "terraform.toml"},
 		Builtins: []string{"gcloud", "pulumi"},
 	},
 	{
