@@ -38,7 +38,7 @@ For a runtime usage example in another project, see `SAMPLE_CLAUDE.md`.
 
 Single semver `v<major>.<minor>.<patch>` for both binary and plugin.
 Source of truth: `plugins/agent-callable/.claude-plugin/plugin.json` → `version` field.
-Git tag: `make tag` reads plugin.json and creates the annotated tag.
+To release: edit `version` in plugin.json, then `make tag` (commits plugin.json + README badge + marketplace.json, creates annotated tag).
 GoReleaser runs in CI (GitHub Actions) on tag push — do not run locally.
 `make build-all` and `make package` are for local dev only.
 

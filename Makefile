@@ -72,8 +72,8 @@ tag:
 	sed -i "s|release-v[0-9.]*-blue|release-v$$ver-blue|" README.md; \
 	jq --arg v "$$ver" '.plugins[0].version = $$v' .claude-plugin/marketplace.json > .claude-plugin/marketplace.json.tmp \
 		&& mv .claude-plugin/marketplace.json.tmp .claude-plugin/marketplace.json; \
-	if git diff --quiet README.md .claude-plugin/marketplace.json; then :; else \
-		git add README.md .claude-plugin/marketplace.json && git commit -m "chore: bump version to v$$ver"; \
+	if git diff --quiet HEAD -- $(PLUGIN_SRC)/.claude-plugin/plugin.json README.md .claude-plugin/marketplace.json; then :; else \
+		git add $(PLUGIN_SRC)/.claude-plugin/plugin.json README.md .claude-plugin/marketplace.json && git commit -m "chore: bump version to v$$ver"; \
 	fi; \
 	git tag -a "v$$ver" -m "v$$ver"; \
 	echo "Created tag v$$ver"
