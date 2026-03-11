@@ -1,7 +1,7 @@
 # agent-callable
 
 [![CI](https://github.com/Evaneos/agent-callable/actions/workflows/ci.yaml/badge.svg)](https://github.com/Evaneos/agent-callable/actions/workflows/ci.yaml)
-[![Release](https://img.shields.io/badge/release-v0.12.2-blue)](https://github.com/Evaneos/agent-callable/releases/latest)
+[![Release](https://img.shields.io/badge/release-v0.13.0-blue)](https://github.com/Evaneos/agent-callable/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Tired of endless prompts from Claude Code?
