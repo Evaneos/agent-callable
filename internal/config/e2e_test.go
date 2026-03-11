@@ -333,6 +333,57 @@ func TestE2ERustcArbitraryArgs(t *testing.T) {
 	}
 }
 
+// --- Concourse fly ---
+
+const flyTOML = `[fly]
+allowed = ["builds", "bs", "containers", "cs", "completion", "format-pipeline", "fp", "get-pipeline", "gp", "jobs", "js", "pipelines", "ps", "resource-versions", "rvs", "resources", "rs", "status", "targets", "ts", "teams", "userinfo", "validate-pipeline", "vp", "version", "volumes", "vs", "watch", "w", "workers", "ws"]
+flags_with_value = ["-t", "--target", "-p", "--pipeline", "-j", "--job", "-b", "--build", "-n", "--team-name", "-c", "--config"]
+`
+
+func TestE2EFlyAllowedSubcommands(t *testing.T) {
+	for _, sub := range []string{
+		"builds", "bs", "containers", "cs", "completion",
+		"format-pipeline", "fp", "get-pipeline", "gp",
+		"jobs", "js", "pipelines", "ps",
+		"resource-versions", "rvs", "resources", "rs",
+		"status", "targets", "ts", "teams", "userinfo",
+		"validate-pipeline", "vp", "version",
+		"volumes", "vs", "watch", "w", "workers", "ws",
+	} {
+		t.Run(sub, func(t *testing.T) {
+			_, tool := setupE2ETool(t, flyTOML, nil)
+			result := tool.Check([]string{"-t", "my-target", sub}, runtimeCtx())
+			if result.Decision != spec.DecisionAllow {
+				t.Errorf("expected allow for 'fly %s', got deny: %s", sub, result.Reason)
+			}
+		})
+	}
+}
+
+func TestE2EFlyBlockedSubcommands(t *testing.T) {
+	for _, sub := range []string{
+		"set-pipeline", "sp", "destroy-pipeline", "dp",
+		"trigger-job", "tj", "abort-build", "ab",
+		"pause-pipeline", "pp", "unpause-pipeline", "up",
+		"set-team", "st", "destroy-team",
+		"login", "logout", "sync",
+		"intercept", "hijack", "execute", "curl",
+		"expose-pipeline", "ep", "hide-pipeline", "hp",
+		"archive-pipeline", "ap", "rename-pipeline", "rp",
+		"pin-resource", "pr", "unpin-resource", "ur",
+		"check-resource", "cr",
+		"prune-worker", "pw", "land-worker", "lw",
+	} {
+		t.Run(sub, func(t *testing.T) {
+			_, tool := setupE2ETool(t, flyTOML, nil)
+			result := tool.Check([]string{"-t", "my-target", sub}, runtimeCtx())
+			if result.Decision == spec.DecisionAllow {
+				t.Errorf("expected deny for 'fly %s'", sub)
+			}
+		})
+	}
+}
+
 // --- Config resolution tests ---
 
 func TestConfigBaseDirFallbackToXDG(t *testing.T) {

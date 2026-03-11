@@ -344,6 +344,11 @@ allowed = ["list"]
 [apt]
 allowed = ["list"]
 `,
+
+	"concourse.toml": `[fly]
+allowed = ["builds", "bs", "containers", "cs", "completion", "format-pipeline", "fp", "get-pipeline", "gp", "jobs", "js", "pipelines", "ps", "resource-versions", "rvs", "resources", "rs", "status", "targets", "ts", "teams", "userinfo", "validate-pipeline", "vp", "version", "volumes", "vs", "watch", "w", "workers", "ws"]
+flags_with_value = ["-t", "--target", "-p", "--pipeline", "-j", "--job", "-b", "--build", "-n", "--team-name", "-c", "--config"]
+`,
 }
 
 // auditConfigBlock returns the [audit] TOML block with a XDG-based default path.
@@ -423,14 +428,10 @@ var Categories = []ConfigCategory{
 		Builtins: []string{"kubectl", "docker"},
 	},
 	{
-		Label:    "Cloud",
-		Desc:     "gcloud",
-		Builtins: []string{"gcloud"},
-	},
-	{
-		Label:    "DevOps",
-		Desc:     "pulumi",
-		Builtins: []string{"pulumi"},
+		Label:    "Cloud & CI/CD",
+		Desc:     "gcloud, pulumi, fly (Concourse CI read-only)",
+		Files:    []string{"concourse.toml"},
+		Builtins: []string{"gcloud", "pulumi"},
 	},
 	{
 		Label: "Dev tools",
