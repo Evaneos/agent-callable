@@ -127,7 +127,7 @@ Out of the box, agent-callable ships with built-in filters for 12+ CLI tools. Ea
 
 Beyond built-ins, default TOML configs add:
 - **Text processing** — `sed`, `yq` with conditional write checking (`-i` triggers `writable_dirs`)
-- **Cloud storage** — `gsutil` read-only (`ls/cat/stat/du/hash`, `acl get`, `lifecycle get`, etc.)
+- **Cloud & CI/CD** — `gsutil` read-only (`ls/cat/stat`, `acl get`, `lifecycle get`, etc.), `terraform` (plan/validate/show), `fly` (Concourse, read-only)
 - **TypeScript** — `tsc`, `eslint` (`--fix` triggers `writable_dirs`), `prettier` (`--write` triggers `writable_dirs`)
 - **Go** — `gofmt` (`-w` triggers `writable_dirs`), `go` (test/build/vet/mod/...)
 - **Python** — `ruff` (`--fix` triggers `writable_dirs`), `uv` (`run` restricted to safe commands like pytest/mypy/ruff), `ty`
