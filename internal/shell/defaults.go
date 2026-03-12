@@ -361,6 +361,24 @@ providers = ["schema"]
 state = ["list", "show", "pull"]
 workspace = ["list", "show"]
 `,
+
+	"gsutil.toml": `[gsutil]
+allowed = ["ls", "cat", "stat", "du", "hash", "version", "help", "acl", "cors", "defacl", "iam", "label", "lifecycle", "logging", "notification", "pap", "requesterpays", "retention", "versioning", "web"]
+[gsutil.subcommands]
+acl = ["get"]
+cors = ["get"]
+defacl = ["get"]
+iam = ["get"]
+label = ["get"]
+lifecycle = ["get"]
+logging = ["get"]
+notification = ["list"]
+pap = ["get"]
+requesterpays = ["get"]
+retention = ["get"]
+versioning = ["get"]
+web = ["get"]
+`,
 }
 
 // auditConfigBlock returns the [audit] TOML block with a XDG-based default path.
@@ -441,8 +459,8 @@ var Categories = []ConfigCategory{
 	},
 	{
 		Label:    "Cloud & CI/CD",
-		Desc:     "gcloud, pulumi, fly (Concourse), terraform (plan/validate/show)",
-		Files:    []string{"concourse.toml", "terraform.toml"},
+		Desc:     "gcloud, gsutil, pulumi, fly (Concourse), terraform (plan/validate/show)",
+		Files:    []string{"concourse.toml", "terraform.toml", "gsutil.toml"},
 		Builtins: []string{"gcloud", "pulumi"},
 	},
 	{
