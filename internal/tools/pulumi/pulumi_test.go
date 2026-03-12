@@ -16,10 +16,11 @@ func TestPulumiAllowlistBasic(t *testing.T) {
 		{"stack", "ls"},
 		{"stack", "history"},
 		{"stack", "output"},
+		{"stack", "select", "prod"},
+		{"stack", "unselect"},
 		{"stack", "tag", "ls"},
 		{"stack", "tag", "get", "env"},
 		{"logs"},
-		{"graph"},
 		{"config", "get", "foo"},
 		{"plugin", "ls"},
 		// Global flags with value argument
@@ -39,7 +40,6 @@ func TestPulumiBlocksProgramExecutionAndSecrets(t *testing.T) {
 		{"destroy"},
 		{"refresh"},
 		// {"preview"} is now allowed (--non-interactive injected via NonInteractiveArgs)
-		{"stack", "select", "x"},
 		{"config", "set", "x", "y"},
 		{"stack", "ls", "--show-secrets"},
 		{"config", "get", "foo", "--show-secrets"},
@@ -61,6 +61,13 @@ func TestPulumiEdgeCases(t *testing.T) {
 		// preview with non-interactive
 		{"preview", "--non-interactive", "--diff"},
 		{"preview", "--non-interactive", "--json"},
+		// stack bare (shows current stack info)
+		{"stack"},
+		// stack select/unselect (local workspace switch)
+		{"stack", "select", "dev"},
+		{"stack", "select", "prod"},
+		{"stack", "unselect"},
+		{"-s", "prod", "stack", "select", "dev"},
 		// stack read variants
 		{"stack", "ls", "--all"},
 		{"stack", "ls", "--json"},
@@ -70,6 +77,9 @@ func TestPulumiEdgeCases(t *testing.T) {
 		// stack tag read
 		{"stack", "tag", "ls"},
 		{"stack", "tag", "get", "environment"},
+		// config bare (lists all config, secrets masked)
+		{"config"},
+		{"config", "--json"},
 		// config get
 		{"config", "get", "mykey", "--json"},
 		// plugin ls
@@ -109,12 +119,13 @@ func TestPulumiEdgeCases(t *testing.T) {
 		{"config", "get", "secret-key", "--show-secrets"},
 		{"stack", "history", "--show-secrets"},
 		// stack write operations
-		{"stack", "select", "prod"},
 		{"stack", "init", "new-stack"},
 		{"stack", "rm", "old-stack"},
 		{"stack", "rename", "new-name"},
 		{"stack", "export"},
+		{"stack", "graph", "output.dot"},
 		{"stack", "import"},
+		{"stack", "change-secrets-provider", "awskms://key"},
 		// stack tag write
 		{"stack", "tag", "set", "env", "prod"},
 		{"stack", "tag", "rm", "env"},
@@ -152,8 +163,11 @@ func TestPulumiReadOnlyNoNonInteractiveArgs(t *testing.T) {
 		{"about"},
 		{"whoami"},
 		{"logs"},
-		{"graph"},
+		{"stack"},
 		{"stack", "ls"},
+		{"stack", "select", "dev"},
+		{"stack", "unselect"},
+		{"config"},
 		{"config", "get", "foo"},
 		{"plugin", "ls"},
 	}

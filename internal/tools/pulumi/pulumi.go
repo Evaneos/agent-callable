@@ -50,7 +50,7 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 	}
 
 	switch cmd {
-	case "version", "about", "whoami", "graph":
+	case "version", "about", "whoami":
 		return spec.Allow()
 	case "preview":
 		if spec.ContainsFlag(args, "--non-interactive") {
@@ -62,7 +62,7 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 	case "stack":
 		sub := spec.NthNonFlag(args, 2, pulumiGlobalFlagsWithValue)
 		switch sub {
-		case "ls", "history", "output":
+		case "", "ls", "history", "output", "select", "unselect":
 			return spec.Allow()
 		case "tag":
 			subsub := spec.NthNonFlag(args, 3, pulumiGlobalFlagsWithValue)
@@ -75,7 +75,7 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 		}
 	case "config":
 		sub := spec.NthNonFlag(args, 2, pulumiGlobalFlagsWithValue)
-		if sub == "get" {
+		if sub == "" || sub == "get" {
 			return spec.Allow()
 		}
 		return spec.Deny(fmt.Sprintf("pulumi config %q not allowed", sub))
