@@ -350,6 +350,13 @@ allowed = ["builds", "bs", "containers", "cs", "completion", "format-pipeline", 
 flags_with_value = ["-t", "--target", "-p", "--pipeline", "-j", "--job", "-b", "--build", "-n", "--team-name", "-c", "--config"]
 `,
 
+	"sops.toml": `[sops]
+allowed = ["filestatus", "encrypt"]
+flags_with_value = ["--output", "--input-type", "--output-type", "--filename-override", "--config", "--kms", "--gcp-kms", "--azure-kv", "--hc-vault-transit", "--age", "--pgp", "--unencrypted-suffix", "--encrypted-suffix", "--unencrypted-regex", "--encrypted-regex", "--encryption-context"]
+write_flags = ["-i", "--in-place"]
+write_target = "last"
+`,
+
 	"terraform.toml": `[terraform]
 allowed = ["fmt", "get", "graph", "init", "output", "plan", "providers", "show", "state", "validate", "version", "workspace"]
 flags_with_value = ["-chdir", "-var", "-var-file", "-target", "-out", "-state", "-backup", "-lock-timeout", "-parallelism", "-plugin-dir"]
@@ -459,8 +466,8 @@ var Categories = []ConfigCategory{
 	},
 	{
 		Label:    "Cloud & CI/CD",
-		Desc:     "gcloud, gsutil, pulumi, fly (Concourse), terraform (plan/validate/show)",
-		Files:    []string{"concourse.toml", "terraform.toml", "gsutil.toml"},
+		Desc:     "gcloud, gsutil, pulumi, sops, fly (Concourse), terraform (plan/validate/show)",
+		Files:    []string{"concourse.toml", "gsutil.toml", "sops.toml", "terraform.toml"},
 		Builtins: []string{"gcloud", "pulumi"},
 	},
 	{
