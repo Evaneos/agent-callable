@@ -26,6 +26,12 @@ For a runtime usage example in another project, see `SAMPLE_CLAUDE.md`.
 - **Remote effects**: block remote/destructive operations (push, PR create/merge, apply/destroy, etc.).
 - **Local "cache/artifact" writes**: usually OK if useful for investigation (e.g. `git fetch`, `docker pull`, `gh repo clone`), as long as it doesn't durably reconfigure the tool.
 
+## Before writing or reviewing a tool filter
+
+- Read the tool's official docs/`--help` output to know all flags, subcommands, and aliases. Don't rely on memory — CLIs have flags you don't expect.
+- Keep the security model in mind: README.md § "What gets filtered" defines the three categories (remote effect / persistent config / local cache). Every decision must map to one.
+- Don't forget universally harmless patterns: `--version`, `--help`, noop/dry-run flags. These are safe for any tool.
+
 ## Code organization
 
 - Each tool is a `ToolSpec` in `internal/tools/<tool>/`.
