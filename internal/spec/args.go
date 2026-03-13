@@ -12,12 +12,16 @@ func Allow() Result { return Result{Decision: DecisionAllow} }
 // Deny returns a deny result with the given reason.
 func Deny(reason string) Result { return Result{Decision: DecisionDeny, Reason: reason} }
 
-// CheckPreamble validates that args are non-empty. Returns a Deny result
-// if validation fails, or a zero Result if OK.
+// CheckPreamble validates that args are non-empty and handles universal
+// info flags. Returns (Allow, false) for --version/--help, (Deny, false)
+// for empty args, or (zero, true) to continue with tool-specific checks.
 // Control characters are checked by the engine before calling Check.
 func CheckPreamble(toolName string, args []string) (Result, bool) {
 	if len(args) == 0 {
 		return Deny(fmt.Sprintf("%s requires a subcommand", toolName)), false
+	}
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "--help") {
+		return Allow(), false
 	}
 	return Result{}, true
 }
