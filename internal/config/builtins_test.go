@@ -557,6 +557,64 @@ func TestDefaultFluxEmptyAndBareArgs(t *testing.T) {
 	spectest.AssertBlocked(t, tool, []string{"-n", "flux-system"})
 }
 
+// --- sops (secrets tool: filestatus + encrypt only, decrypt blocked) ---
+
+func TestDefaultSopsAllowlistBasic(t *testing.T) {
+	tool := loadDefaultTool(t, "sops")
+	allowed := [][]string{
+		{"filestatus", "secrets.enc.yaml"},
+		{"filestatus", "config.json"},
+		{"encrypt", "secrets.yaml"},
+		{"encrypt", "--kms", "arn:aws:kms:us-east-1:123:key/abc", "secrets.yaml"},
+		{"encrypt", "--gcp-kms", "projects/p/locations/l/keyRings/r/cryptoKeys/k", "secrets.yaml"},
+		{"encrypt", "--age", "age1abc", "secrets.yaml"},
+		{"encrypt", "--pgp", "FBC7B9E2A4F9289AC0C1D4843D16CEE4A27381B4", "secrets.yaml"},
+		{"encrypt", "--config", "/path/to/.sops.yaml", "secrets.yaml"},
+		{"encrypt", "--input-type", "json", "--output-type", "yaml", "secrets.json"},
+	}
+	spectest.AssertAllowedBatch(t, tool, allowed)
+}
+
+func TestDefaultSopsBlocksSecretOps(t *testing.T) {
+	tool := loadDefaultTool(t, "sops")
+	blocked := [][]string{
+		{"decrypt", "secrets.enc.yaml"},
+		{"edit", "secrets.enc.yaml"},
+		{"rotate", "secrets.enc.yaml"},
+		{"set", "secrets.enc.yaml", "[\"key\"]", "\"value\""},
+		{"unset", "secrets.enc.yaml", "[\"key\"]"},
+		{"publish", "secrets.enc.yaml"},
+		{"exec-env", "secrets.enc.yaml", "env"},
+		{"exec-file", "secrets.enc.yaml", "cat {}"},
+		{"updatekeys", "secrets.enc.yaml"},
+	}
+	spectest.AssertBlockedBatch(t, tool, blocked)
+}
+
+func TestDefaultSopsEncryptInPlaceAllowed(t *testing.T) {
+	tool := loadDefaultToolWithDirs(t, "sops", []string{"/tmp"})
+	allowed := [][]string{
+		{"-i", "encrypt", "/tmp/secrets.yaml"},
+		{"encrypt", "--in-place", "/tmp/secrets.yaml"},
+	}
+	spectest.AssertAllowedBatch(t, tool, allowed)
+}
+
+func TestDefaultSopsEncryptInPlaceBlocked(t *testing.T) {
+	tool := loadDefaultToolWithDirs(t, "sops", []string{"/tmp"})
+	blocked := [][]string{
+		{"-i", "encrypt", "/etc/secrets.yaml"},
+		{"encrypt", "--in-place", "/etc/secrets.yaml"},
+	}
+	spectest.AssertBlockedBatch(t, tool, blocked)
+}
+
+func TestDefaultSopsEmptyAndBareArgs(t *testing.T) {
+	tool := loadDefaultTool(t, "sops")
+	spectest.AssertBlocked(t, tool, []string{})
+	spectest.AssertBlocked(t, tool, []string{"--input-type", "json"})
+}
+
 // --- go (subcommand allowlist in go.toml) ---
 
 func TestDefaultGoAllowlist(t *testing.T) {
