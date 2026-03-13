@@ -28,6 +28,21 @@ func TestCheckPreamble(t *testing.T) {
 	if ok || res.Decision != DecisionDeny {
 		t.Errorf("expected deny for empty args, got ok=%v res=%+v", ok, res)
 	}
+	// --version -> allow (not ok, caller should return early)
+	res, ok = CheckPreamble("mytool", []string{"--version"})
+	if ok || res.Decision != DecisionAllow {
+		t.Errorf("expected allow for --version, got ok=%v res=%+v", ok, res)
+	}
+	// --help -> allow
+	res, ok = CheckPreamble("mytool", []string{"--help"})
+	if ok || res.Decision != DecisionAllow {
+		t.Errorf("expected allow for --help, got ok=%v res=%+v", ok, res)
+	}
+	// --version with extra args -> continue to tool-specific check
+	_, ok = CheckPreamble("mytool", []string{"--version", "extra"})
+	if !ok {
+		t.Error("expected ok (continue) for --version with extra args")
+	}
 	// Valid args -> ok
 	res, ok = CheckPreamble("mytool", []string{"get", "pods"})
 	if !ok {
