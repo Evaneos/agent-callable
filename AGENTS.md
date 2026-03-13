@@ -34,6 +34,14 @@ For a runtime usage example in another project, see `SAMPLE_CLAUDE.md`.
   - **tested** (table-driven unit tests),
   - **documented** in `README.md` (supported commands + philosophy/heuristics if needed).
 
+## Git & PR conventions
+
+- Rebase merge (fast-forward), no merge commits, no squash. Individual commits land on main as-is.
+- Clean history: no fixup/revert commits in branches — amend or rebase before PR.
+- [Conventional Commits](https://www.conventionalcommits.org/) with scope = tool or module (`defaults`, `engine`, `gcloud`, `spec`, …).
+- Commit messages must be changelog-ready (*what* and *why*).
+- Rebase on `origin/main` before submitting the PR.
+
 ## Versioning & release
 
 Single semver `v<major>.<minor>.<patch>` for both binary and plugin.
