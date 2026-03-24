@@ -315,6 +315,9 @@ flags_with_value = ["--group", "--extra", "--python", "--directory", "--project"
 run = ["pytest", "mypy", "pyright", "ty", "ruff", "black", "isort", "pylint", "flake8", "bandit", "pip-audit"]
 python = ["list", "find", "pin"]
 pip = ["list", "show", "check", "tree", "compile"]
+
+[uvx]
+allowed = ["pytest", "mypy", "pyright", "ty", "ruff", "black", "isort", "pylint", "flake8", "bandit", "pip-audit"]
 `,
 
 	"system-restricted.toml": `[journalctl]
