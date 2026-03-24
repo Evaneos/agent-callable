@@ -172,7 +172,7 @@ flags_with_value = ["-e", "-f", "--expression", "--file"]
 
 `write_flags` makes `write_target` conditional: the check is only enforced when one of the listed flags is present. Without the flag, the command runs freely (read-only mode). Short flags match by prefix (`-i` matches `-i.bak`), long flags match exactly or with `=` (`--fix` matches `--fix=true`).
 
-Built-in tools always take priority over config files.
+Built-in tools always take priority over config files. User configs can also use `mode = "extend"` to add subcommands to built-in tools without replacing their custom logic (see `agent-callable --help-config`).
 
 ### Global settings
 
