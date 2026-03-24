@@ -52,7 +52,10 @@ Format
 Fields (inside [toolname])
 --------------------------
 
-  allowed          (string[], required)  Subcommands to allow, or ["*"] for all
+  mode             (string)    "replace" (default) or "extend"
+                               replace: TOML replaces the built-in entirely
+                               extend: adds to existing tool as fallback allowlist
+  allowed          (string[], required for replace)  Subcommands to allow, or ["*"] for all
   flags_with_value (string[])  Flags that consume the next argument
   write_target     (string)    Check write destination against writable_dirs:
                                "last" = last positional arg (cp, mv, ln)
@@ -74,6 +77,28 @@ Modes
   allowed + [toolname.subcommands]  → Nested: first arg in allowed, second checked
                                       against subcommands[cmd] if the key exists,
                                       otherwise flat-allowed for that command
+
+Extend mode
+-----------
+
+  Use mode = "extend" to add subcommands to a built-in tool without
+  losing its custom logic (e.g. gh api write-method detection).
+  The built-in Check runs first; if it denies, the TOML is consulted.
+
+  # Add "gh pr create" to the built-in gh allowlist:
+  [gh]
+  mode = "extend"
+  allowed = ["pr"]
+  [gh.subcommands]
+  pr = ["create"]
+
+  # Allow git push via extend:
+  [git]
+  mode = "extend"
+  allowed = ["push"]
+
+  Works on any built-in (gh, git, docker, npm, pulumi, gcloud, kubectl).
+  If extend targets a non-registered tool, a warning is printed.
 
 Global config (config.toml)
 ---------------------------
