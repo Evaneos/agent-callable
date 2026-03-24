@@ -524,6 +524,85 @@ func TestLoadAllNoConfigNoDefaults(t *testing.T) {
 	}
 }
 
+func TestParseModeExtend(t *testing.T) {
+	configs, err := ParseTOML(`[gh]
+mode = "extend"
+allowed = ["pr"]
+[gh.subcommands]
+pr = ["create"]
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configs) != 1 {
+		t.Fatalf("expected 1 config, got %d", len(configs))
+	}
+	if configs[0].Mode != "extend" {
+		t.Errorf("expected mode=extend, got %q", configs[0].Mode)
+	}
+}
+
+func TestParseModeReplace(t *testing.T) {
+	configs, err := ParseTOML(`[gh]
+mode = "replace"
+allowed = ["pr"]
+[gh.subcommands]
+pr = ["create"]
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configs[0].Mode != "replace" {
+		t.Errorf("expected mode=replace, got %q", configs[0].Mode)
+	}
+}
+
+func TestParseModeDefault(t *testing.T) {
+	configs, err := ParseTOML(`[echo]
+allowed = ["*"]
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configs[0].Mode != "" {
+		t.Errorf("expected empty mode (default), got %q", configs[0].Mode)
+	}
+}
+
+func TestParseModeInvalid(t *testing.T) {
+	_, err := ParseTOML(`[gh]
+mode = "invalid"
+allowed = ["pr"]
+`)
+	if err == nil {
+		t.Fatal("expected error for invalid mode")
+	}
+}
+
+func TestExtendModeAllowsEmptyAllowed(t *testing.T) {
+	_, err := ParseTOML(`[gh]
+mode = "extend"
+[gh.subcommands]
+pr = ["create"]
+`)
+	if err != nil {
+		t.Fatalf("extend mode with no allowed should be valid, got: %v", err)
+	}
+}
+
+func TestExtendModeAllowsSubcommandsNotInAllowed(t *testing.T) {
+	_, err := ParseTOML(`[gh]
+mode = "extend"
+allowed = ["ssh-key"]
+[gh.subcommands]
+pr = ["create"]
+ssh-key = ["list"]
+`)
+	if err != nil {
+		t.Fatalf("extend mode subcommands keys need not be in allowed, got: %v", err)
+	}
+}
+
 func copyTestFile(t *testing.T, src, dstDir string) {
 	t.Helper()
 	data, err := os.ReadFile(src)
