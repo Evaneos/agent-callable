@@ -534,3 +534,132 @@ func TestConfigOverrideStillRespectsBuiiltinToggle(t *testing.T) {
 		t.Fatal("expected npm to be unregistered when not in [builtins]")
 	}
 }
+
+// --- Extend mode tests ---
+
+func TestExtendModeGHPrCreate(t *testing.T) {
+	ghExtend := config.ConfigTool{
+		ToolConfig: config.ToolConfig{
+			Name:    "gh",
+			Mode:    "extend",
+			Allowed: []string{"pr"},
+			Subcommands: map[string][]string{
+				"pr": {"create"},
+			},
+		},
+	}
+	gc := &config.GlobalConfig{Builtins: allBuiltinsEnabled()}
+	e := New(gc, []config.ConfigTool{ghExtend})
+
+	// Extended subcommand allowed via fallback
+	cr := e.Check([]string{"gh", "pr", "create"})
+	if !cr.Allowed {
+		t.Fatalf("expected gh pr create allowed after extend, got: %s", cr.Reason)
+	}
+	// Existing builtin allows still work
+	cr = e.Check([]string{"gh", "pr", "list"})
+	if !cr.Allowed {
+		t.Fatalf("expected gh pr list still allowed, got: %s", cr.Reason)
+	}
+	// Blocked by both builtin and fallback
+	cr = e.Check([]string{"gh", "pr", "merge", "123"})
+	if cr.Allowed {
+		t.Fatal("expected gh pr merge still blocked")
+	}
+	// Custom api logic preserved (builtin allows GET, denies POST)
+	cr = e.Check([]string{"gh", "api", "/repos/X/Y"})
+	if !cr.Allowed {
+		t.Fatalf("expected gh api GET allowed, got: %s", cr.Reason)
+	}
+	cr = e.Check([]string{"gh", "api", "/repos/X/Y", "-XPOST"})
+	if cr.Allowed {
+		t.Fatal("expected gh api POST still blocked")
+	}
+}
+
+func TestExtendModeGitPush(t *testing.T) {
+	gitExtend := config.ConfigTool{
+		ToolConfig: config.ToolConfig{
+			Name:    "git",
+			Mode:    "extend",
+			Allowed: []string{"push"},
+		},
+	}
+	gc := &config.GlobalConfig{Builtins: allBuiltinsEnabled()}
+	e := New(gc, []config.ConfigTool{gitExtend})
+
+	cr := e.Check([]string{"git", "push", "origin", "main"})
+	if !cr.Allowed {
+		t.Fatalf("expected git push allowed after extend, got: %s", cr.Reason)
+	}
+	cr = e.Check([]string{"git", "status"})
+	if !cr.Allowed {
+		t.Fatalf("expected git status still allowed, got: %s", cr.Reason)
+	}
+}
+
+func TestExtendModeOnNonExistentToolIgnored(t *testing.T) {
+	cfg := config.ConfigTool{
+		ToolConfig: config.ToolConfig{
+			Name:    "nonexistent",
+			Mode:    "extend",
+			Allowed: []string{"sub"},
+		},
+	}
+	gc := &config.GlobalConfig{Builtins: allBuiltinsEnabled()}
+	e := New(gc, []config.ConfigTool{cfg})
+
+	cr := e.Check([]string{"nonexistent"})
+	if cr.Allowed {
+		t.Fatal("expected nonexistent tool still blocked")
+	}
+}
+
+func TestExtendModePreservesListToolsSource(t *testing.T) {
+	ghExtend := config.ConfigTool{
+		ToolConfig: config.ToolConfig{
+			Name:    "gh",
+			Mode:    "extend",
+			Allowed: []string{"pr"},
+			Subcommands: map[string][]string{
+				"pr": {"create"},
+			},
+		},
+	}
+	gc := &config.GlobalConfig{Builtins: allBuiltinsEnabled()}
+	e := New(gc, []config.ConfigTool{ghExtend})
+
+	for _, entry := range e.ListTools() {
+		if entry.Name == "gh" {
+			if entry.Source != "built-in" {
+				t.Errorf("expected gh source=built-in after extend, got %q", entry.Source)
+			}
+			return
+		}
+	}
+	t.Error("gh not found in ListTools")
+}
+
+func TestExtendModeNonInteractiveEnvPreserved(t *testing.T) {
+	ghExtend := config.ConfigTool{
+		ToolConfig: config.ToolConfig{
+			Name:    "gh",
+			Mode:    "extend",
+			Allowed: []string{"pr"},
+			Subcommands: map[string][]string{
+				"pr": {"create"},
+			},
+		},
+	}
+	gc := &config.GlobalConfig{Builtins: allBuiltinsEnabled()}
+	e := New(gc, []config.ConfigTool{ghExtend})
+
+	tool, ok := e.reg.Get("gh")
+	if !ok {
+		t.Fatal("gh not registered")
+	}
+	env := tool.NonInteractiveEnv()
+	if env["GH_PROMPT_DISABLED"] != "1" {
+		t.Errorf("expected GH_PROMPT_DISABLED=1, got %v", env)
+	}
+}
