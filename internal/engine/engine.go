@@ -72,9 +72,19 @@ func New(gc *config.GlobalConfig, cfgs []config.ConfigTool) *Engine {
 		builtins[name] = true
 	}
 
-	// Config-driven tools (default TOML + user-defined, override builtin if same name)
+	// Config-driven tools (default TOML + user-defined).
 	for _, cfg := range cfgs {
 		name := strings.ToLower(cfg.ToolConfig.Name)
+		if cfg.ToolConfig.Mode == "extend" {
+			if t, ok := r.Get(name); ok {
+				fallback := cfg.ToToolSpec(gc.WritableDirs)
+				r.Unregister(name)
+				r.Register(spec.NewExtendedTool(t, fallback))
+			} else {
+				fmt.Fprintf(os.Stderr, "agent-callable: config warning: cannot extend %q (not registered)\n", name)
+			}
+			continue
+		}
 		if builtins[name] {
 			r.Unregister(name)
 		}
