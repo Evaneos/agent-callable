@@ -37,6 +37,7 @@ type GlobalConfig struct {
 // The Name field is set from the TOML section key, not from the file content.
 type ToolConfig struct {
 	Name           string              `toml:"name"`
+	Mode           string              `toml:"mode"`
 	Allowed        []string            `toml:"allowed"`
 	Subcommands    map[string][]string `toml:"subcommands"`
 	Env            map[string]string   `toml:"env"`
@@ -60,6 +61,29 @@ func (c *ToolConfig) Validate() error {
 	}
 	if !nameRe.MatchString(c.Name) {
 		return fmt.Errorf("name %q must match ^[a-zA-Z0-9._-]+$", c.Name)
+	}
+	if c.Mode != "" && c.Mode != "replace" && c.Mode != "extend" {
+		return fmt.Errorf("[%s]: mode must be \"replace\" or \"extend\" (got %q)", c.Name, c.Mode)
+	}
+	if c.Mode == "extend" {
+		// Extend mode: relaxed validation — only check flags format.
+		for _, f := range c.FlagsWithValue {
+			if !strings.HasPrefix(f, "-") {
+				return fmt.Errorf("flags_with_value entry %q must start with -", f)
+			}
+		}
+		for _, f := range c.WriteFlags {
+			if !strings.HasPrefix(f, "-") {
+				return fmt.Errorf("write_flags entry %q must start with -", f)
+			}
+		}
+		if len(c.WriteFlags) > 0 && c.WriteTarget == "" {
+			return fmt.Errorf("[%s]: write_flags requires write_target", c.Name)
+		}
+		if c.WriteTarget != "" && c.WriteTarget != "last" && c.WriteTarget != "all" {
+			return fmt.Errorf("[%s]: write_target must be \"last\" or \"all\" (got %q)", c.Name, c.WriteTarget)
+		}
+		return nil
 	}
 	if len(c.Allowed) == 0 {
 		return fmt.Errorf("[%s]: allowed is required", c.Name)
