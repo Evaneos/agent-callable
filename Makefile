@@ -11,8 +11,10 @@ PLUGIN_SRC   ?= plugins/agent-callable
 PLUGIN_NAME  ?= $(shell jq -r .name $(PLUGIN_SRC)/.claude-plugin/plugin.json 2>/dev/null)
 PLUGIN_VER   ?= $(shell jq -r .version $(PLUGIN_SRC)/.claude-plugin/plugin.json 2>/dev/null)
 PLUGIN_CACHE ?= $(HOME)/.claude/plugins/cache/agent-callable/$(PLUGIN_NAME)/$(PLUGIN_VER)
+PLUGIN_DIR   ?= $(CURDIR)/$(PLUGIN_SRC)
+MAIN_DIR     ?= $(shell git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')/$(PLUGIN_SRC)
 
-.PHONY: build install test fmt tidy clean build-all clean-all package info plugin-sync tag
+.PHONY: build install test fmt tidy clean build-all clean-all package info dev heal tag
 
 LDFLAGS ?= -ldflags="-s -w -X main.version=$(VERSION)"
 
@@ -20,7 +22,7 @@ LDFLAGS ?= -ldflags="-s -w -X main.version=$(VERSION)"
 build:
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/agent-callable
 
-install: plugin-sync
+install:
 	go install $(LDFLAGS) ./cmd/agent-callable
 
 test:
@@ -57,11 +59,20 @@ package: build-all
 	@cd $(DISTDIR) && sha256sum *.tar.gz > checksums.txt
 	@echo "Checksums: $(DISTDIR)/checksums.txt"
 
-# Sync Claude Code plugin to local cache
-plugin-sync:
-	@mkdir -p $(PLUGIN_CACHE)
-	@rsync -a --delete --exclude='.git' $(PLUGIN_SRC)/ $(PLUGIN_CACHE)/
-	@echo "Synced $(PLUGIN_SRC)/ → $(PLUGIN_CACHE)/"
+# Plugin dev: symlink cache to current directory (main or worktree)
+dev:
+	@mkdir -p $(dir $(PLUGIN_CACHE))
+	@rm -rf $(PLUGIN_CACHE)
+	@ln -s $(PLUGIN_DIR) $(PLUGIN_CACHE)
+	@echo "Cache symlinked → $(PLUGIN_DIR)"
+
+# Plugin heal: fix dangling symlink (cleaned worktree) by pointing back to main
+heal:
+	@if [ -L $(PLUGIN_CACHE) ] && [ ! -d $(PLUGIN_CACHE) ]; then \
+		rm -f $(PLUGIN_CACHE); \
+		ln -s $(MAIN_DIR) $(PLUGIN_CACHE); \
+		echo "Cache healed → $(MAIN_DIR)"; \
+	fi
 
 # Create annotated tag from plugin.json version
 tag:
@@ -84,4 +95,6 @@ info:
 	@echo "Version:   $(VERSION)"
 	@echo "Platforms: $(PLATFORMS)"
 	@echo "Plugin:    $(PLUGIN_NAME) v$(PLUGIN_VER)"
-	@if [ -d "$(PLUGIN_CACHE)" ]; then echo "Cache:     $(PLUGIN_CACHE) (installed)"; else echo "Cache:     not installed"; fi
+	@if [ -L "$(PLUGIN_CACHE)" ]; then echo "Cache:     $(PLUGIN_CACHE) → $$(readlink $(PLUGIN_CACHE)) (symlink)"; \
+	elif [ -d "$(PLUGIN_CACHE)" ]; then echo "Cache:     $(PLUGIN_CACHE) (copy)"; \
+	else echo "Cache:     not installed"; fi
