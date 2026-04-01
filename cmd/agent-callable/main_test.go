@@ -293,3 +293,71 @@ func TestRunClaude_WrapperNestedAllowed(t *testing.T) {
 		t.Fatalf("expected allow JSON, got %q", out)
 	}
 }
+
+// --- bash/sh wrapper end-to-end tests ---
+
+func TestRunClaude_BashCAllowed(t *testing.T) {
+	enableAllBuiltins(t)
+	var code int
+	out := captureStdout(func() {
+		code = run([]string{"--claude", `bash -c "git status"`})
+	})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, `"permissionDecision":"allow"`) {
+		t.Fatalf("expected allow JSON, got %q", out)
+	}
+}
+
+func TestRunClaude_BashCBlocked(t *testing.T) {
+	enableAllBuiltins(t)
+	var code int
+	out := captureStdout(func() {
+		code = run([]string{"--claude", `bash -c "git push"`})
+	})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Fatalf("expected empty stdout for blocked bash -c, got %q", out)
+	}
+}
+
+func TestRunClaude_BashCTypicalCdPattern(t *testing.T) {
+	enableAllBuiltins(t)
+	var code int
+	out := captureStdout(func() {
+		code = run([]string{"--claude", `bash -c "cd /tmp && git status"`})
+	})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, `"permissionDecision":"allow"`) {
+		t.Fatalf("expected allow JSON, got %q", out)
+	}
+}
+
+func TestRunAuditBashCAllowed(t *testing.T) {
+	enableAllBuiltins(t)
+	code := run([]string{"--audit", "bash", "-c", "git status"})
+	if code != 0 {
+		t.Fatalf("expected exit 0 for audit bash -c allowed, got %d", code)
+	}
+}
+
+func TestRunAuditBashCBlocked(t *testing.T) {
+	enableAllBuiltins(t)
+	code := run([]string{"--audit", "bash", "-c", "git push"})
+	if code != 1 {
+		t.Fatalf("expected exit 1 for audit bash -c blocked, got %d", code)
+	}
+}
+
+func TestRunAuditBashWithoutC(t *testing.T) {
+	enableAllBuiltins(t)
+	code := run([]string{"--audit", "bash", "script.sh"})
+	if code != 1 {
+		t.Fatalf("expected exit 1 for bash without -c, got %d", code)
+	}
+}

@@ -2,6 +2,7 @@ package shell
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -35,6 +36,8 @@ func Validate(expr string, reg *spec.Registry, opts ValidateOpts) (*Result, erro
 	localFuncs := make(map[string]bool)
 	toolSet := make(map[string]bool)
 	var walkErr error
+	var currentDir string      // tracks the last known cd destination for relative path resolution
+	var currentDirUncertain bool // true when cd was to a dynamic/unresolvable path
 
 	// First pass: collect function declarations.
 	syntax.Walk(prog, func(node syntax.Node) bool {
@@ -67,6 +70,48 @@ func Validate(expr string, reg *spec.Registry, opts ValidateOpts) (*Result, erro
 				return true
 			}
 
+			// Track cd to resolve relative paths in subsequent redirections.
+			if name == "cd" {
+				if len(n.Args) < 2 {
+					// bare cd → home directory
+					if home, err := os.UserHomeDir(); err == nil {
+						currentDir = home
+						currentDirUncertain = false
+					} else {
+						currentDirUncertain = true
+					}
+				} else {
+					arg := wordLit(n.Args[1])
+					if arg == "" {
+						// dynamic cd arg (e.g. cd $VAR) — can't track
+						currentDirUncertain = true
+					} else {
+						currentDirUncertain = false
+						switch {
+						case arg == "~":
+							if home, err := os.UserHomeDir(); err == nil {
+								currentDir = home
+							} else {
+								currentDirUncertain = true
+							}
+						case strings.HasPrefix(arg, "~/"):
+							if home, err := os.UserHomeDir(); err == nil {
+								currentDir = filepath.Join(home, arg[2:])
+							} else {
+								currentDirUncertain = true
+							}
+						case filepath.IsAbs(arg):
+							currentDir = arg
+						case currentDir != "":
+							currentDir = filepath.Join(currentDir, arg)
+						default:
+							// relative cd from unknown cwd
+							currentDirUncertain = true
+						}
+					}
+				}
+			}
+
 			if !isAllowed(name, localFuncs, reg) {
 				if dangerousBuiltins[name] {
 					walkErr = fmt.Errorf("dangerous builtin %q blocked", name)
@@ -80,7 +125,7 @@ func Validate(expr string, reg *spec.Registry, opts ValidateOpts) (*Result, erro
 				if opts.CheckFunc != nil {
 					cmdArgs := make([]string, 0, len(n.Args)-1)
 					for _, a := range n.Args[1:] {
-						cmdArgs = append(cmdArgs, wordLit(a))
+						cmdArgs = append(cmdArgs, wordSource(a))
 					}
 					if err := opts.CheckFunc(name, cmdArgs); err != nil {
 						walkErr = err
@@ -93,7 +138,7 @@ func Validate(expr string, reg *spec.Registry, opts ValidateOpts) (*Result, erro
 			}
 
 		case *syntax.Redirect:
-			if err := checkRedirect(n, opts); err != nil {
+			if err := checkRedirect(n, opts, currentDir, currentDirUncertain); err != nil {
 				walkErr = err
 				return false
 			}
@@ -111,6 +156,36 @@ func Validate(expr string, reg *spec.Registry, opts ValidateOpts) (*Result, erro
 		names = append(names, n)
 	}
 	return &Result{ToolNames: names}, nil
+}
+
+// wordSource returns a best-effort string representation of a word.
+// Unlike wordLit, it replaces variable/command substitutions with "__"
+// instead of returning "". This preserves argument structure (e.g. flag
+// detection like -c) while handling dynamic content gracefully.
+func wordSource(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	var sb strings.Builder
+	for _, part := range w.Parts {
+		switch p := part.(type) {
+		case *syntax.Lit:
+			sb.WriteString(p.Value)
+		case *syntax.SglQuoted:
+			sb.WriteString(p.Value)
+		case *syntax.DblQuoted:
+			for _, qp := range p.Parts {
+				if lit, ok := qp.(*syntax.Lit); ok {
+					sb.WriteString(lit.Value)
+				} else {
+					sb.WriteString("__")
+				}
+			}
+		default:
+			sb.WriteString("__")
+		}
+	}
+	return sb.String()
 }
 
 // wordLit returns the literal string value of a word, or "" if the word
@@ -159,7 +234,9 @@ func isAllowed(name string, localFuncs map[string]bool, reg *spec.Registry) bool
 }
 
 // checkRedirect validates a redirect node.
-func checkRedirect(redir *syntax.Redirect, opts ValidateOpts) error {
+// currentDir is the last known cd destination; uncertain is true when the
+// working directory could not be tracked (e.g. after `cd $VAR`).
+func checkRedirect(redir *syntax.Redirect, opts ValidateOpts, currentDir string, uncertain bool) error {
 	op := redir.Op
 	// Only check file-write redirections (> and >>).
 	// DplOut (>&) is fd duplication (e.g. 2>&1), not a file write.
@@ -176,6 +253,17 @@ func checkRedirect(redir *syntax.Redirect, opts ValidateOpts) error {
 	path := wordLit(target)
 	if path == "" {
 		return fmt.Errorf("dynamic redirection blocked (variable/substitution as target)")
+	}
+
+	if !filepath.IsAbs(path) {
+		if uncertain {
+			return fmt.Errorf("redirection to %q blocked (working directory uncertain after dynamic cd)", path)
+		}
+		// Resolve relative paths against the cd-tracked directory so that
+		// e.g. `cd /tmp && cmd > out.txt` correctly resolves to /tmp/out.txt.
+		if currentDir != "" {
+			path = filepath.Join(currentDir, path)
+		}
 	}
 
 	if !spec.IsUnderWritableDir(path, opts.WritableDirs) {
