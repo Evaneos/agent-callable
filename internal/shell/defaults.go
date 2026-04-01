@@ -452,9 +452,9 @@ var Categories = []ConfigCategory{
 	},
 	{
 		Label:    "Utilities",
-		Desc:     "echo, env, base64, printf, md5sum, sleep, timeout, nice, xargs, which, type...",
+		Desc:     "bash -c / sh -c (shell expressions), echo, env, base64, printf, md5sum, sleep, timeout, nice, xargs, which, type...",
 		Files:    []string{"utilities.toml"},
-		Builtins: []string{"timeout", "nice", "xargs"},
+		Builtins: []string{"bash", "sh", "timeout", "nice", "xargs"},
 	},
 	{
 		Label: "Network",

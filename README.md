@@ -121,6 +121,7 @@ Out of the box, agent-callable ships with built-in filters for 12+ CLI tools. Ea
 - **gcloud** — conservative allowlist (list/describe/get/show/read/logs)
 - **npm** — read-only + `install/ci` with `--ignore-scripts` + `run` restricted to safe scripts (test, lint, build, etc.)
 - **kubectx**, **kubectl-crossplane**, **krew** — read-only
+- **bash**, **sh** — shell interpreter wrappers: only `-c <expr>` form allowed; the inner expression is recursively validated against the same policy, with `cd`-aware resolution of relative write destinations
 - **xargs**, **timeout**, **nice** — wrapper tools: validate the inner command recursively against the same policy
 
 </details>
@@ -200,7 +201,7 @@ agent-callable --sh 'for ns in prod staging; do kubectl get pods -n $ns; done'
 agent-callable --sh 'git status && git diff --stat'
 ```
 
-This mode is deliberately weaker than single-command mode on argument checking: variables like `$ns` can't be resolved statically, so only command names are validated. Dynamic commands (`$CMD args`) and builtins that could bypass validation (`eval`, `exec`, `source`) are blocked. Write redirections are limited to `/dev/null` and `writable_dirs`.
+This mode is deliberately weaker than single-command mode on argument checking: variables like `$ns` can't be resolved statically, so only command names are validated. Dynamic commands (`$CMD args`) and builtins that could bypass validation (`eval`, `exec`, `source`) are blocked. Write redirections are limited to `/dev/null` and `writable_dirs`. `cd` calls to literal paths are tracked: a relative redirection after `cd /tmp` correctly resolves to `/tmp/out.txt` for the writable-dir check.
 
 ---
 

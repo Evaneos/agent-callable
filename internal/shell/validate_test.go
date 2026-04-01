@@ -554,3 +554,438 @@ func TestXargsBlocked(t *testing.T) {
 		})
 	}
 }
+
+// --- bash/sh -c integration tests ---
+
+// bashShellRegistry creates a registry with bash/sh wired for recursive shell validation.
+func bashShellRegistry() (*spec.Registry, ValidateOpts) {
+	reg := spec.NewRegistry()
+	for _, name := range []string{"git", "npm", "npx", "tsc", "echo", "head", "grep", "cat"} {
+		reg.Register(&fakeToolSpec{name: name})
+	}
+
+	bashWrapper := spec.NewShellCWrapper("bash")
+	shWrapper := spec.NewShellCWrapper("sh")
+	reg.Register(bashWrapper)
+	reg.Register(shWrapper)
+
+	// CheckFunc validates via registry (used for inner commands in recursive calls).
+	checkFn := func(name string, args []string) error {
+		t, ok := reg.Get(name)
+		if !ok {
+			return fmt.Errorf("command %q not allowed", name)
+		}
+		res := t.Check(args, spec.RuntimeCtx{})
+		if res.Decision != spec.DecisionAllow {
+			return fmt.Errorf("%s", res.Reason)
+		}
+		return nil
+	}
+
+	opts := ValidateOpts{
+		WritableDirs: []string{"/tmp"},
+		CheckFunc:    checkFn,
+	}
+
+	// Inject recursive shell validator into bash/sh wrappers.
+	shellValidateFn := func(expr string) error {
+		_, err := Validate(expr, reg, opts)
+		return err
+	}
+	bashWrapper.SetValidateFunc(shellValidateFn)
+	shWrapper.SetValidateFunc(shellValidateFn)
+
+	return reg, opts
+}
+
+func TestBashCAllowed(t *testing.T) {
+	reg, opts := bashShellRegistry()
+	tests := []struct {
+		name string
+		expr string
+	}{
+		{"simple allowed command", `bash -c "git status"`},
+		{"pipeline", `bash -c "git log | head -5"`},
+		{"cd + command", `bash -c "cd /tmp && git status"`},
+		{"cd + pipe + redirect", `bash -c "cd /tmp && git log > out.txt"`},
+		{"stderr redirect", `bash -c "git status 2>&1"`},
+		{"stderr to /dev/null", `bash -c "git status 2>/dev/null"`},
+		{"sh variant", `sh -c "git status"`},
+		{"safe flag -e", `bash -e -c "git status"`},
+		{"safe flag -u", `bash -u -c "git status"`},
+		{"safe flags combined", `bash -eu -c "git status"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err != nil {
+				t.Errorf("expected allowed, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestBashCBlocked(t *testing.T) {
+	reg, opts := bashShellRegistry()
+	tests := []struct {
+		name string
+		expr string
+	}{
+		{"inner command not in registry", `bash -c "rm -rf /"`},
+		{"unknown inner command in chain", `bash -c "git log && curl -X DELETE http://example.com"`},
+		{"bash without -c", `bash script.sh`},
+		{"bash no args", `bash`},
+		{"redirect outside writable dirs", `bash -c "git log > /etc/out.txt"`},
+		{"sh blocked inner", `sh -c "rm -rf /"`},
+		{"nested bash inner blocked", `bash -c "bash -c \"rm -rf /\""`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err == nil {
+				t.Errorf("expected blocked for %q", tt.expr)
+			}
+		})
+	}
+}
+
+func TestBashCCdTracking(t *testing.T) {
+	reg, opts := bashShellRegistry()
+
+	// Relative redirect after cd: resolves to /tmp/out.txt → allowed.
+	_, err := Validate(`bash -c "cd /tmp && git log > out.txt"`, reg, opts)
+	if err != nil {
+		t.Errorf("expected allowed (cd /tmp → out.txt resolves to /tmp/out.txt), got: %v", err)
+	}
+
+	// Relative redirect without cd: resolves against process CWD → blocked.
+	_, err = Validate(`bash -c "git log > out.txt"`, reg, opts)
+	if err == nil {
+		t.Error("expected blocked (out.txt with no cd has no writable resolution)")
+	}
+
+	// Redirect to absolute writable path — always allowed regardless of cd.
+	_, err = Validate(`bash -c "git log > /tmp/out.txt"`, reg, opts)
+	if err != nil {
+		t.Errorf("expected allowed (absolute /tmp/out.txt), got: %v", err)
+	}
+}
+
+func TestBashCTypicalClaudePattern(t *testing.T) {
+	reg, opts := bashShellRegistry()
+	// Typical pattern from audit log: cd into a project dir, run a TS check.
+	expr := `bash -c "cd /home/grs/work/cloud-infrastructure/product/cloudsql/staging && npx tsc --noEmit 2>&1 | head -20"`
+	_, err := Validate(expr, reg, opts)
+	if err != nil {
+		t.Errorf("expected allowed for typical Claude cd+npx pattern, got: %v", err)
+	}
+}
+
+// --- Combinatorial bash/sh tests ---
+
+func TestBashCAllowedCombinatorial(t *testing.T) {
+	reg, opts := bashShellRegistry()
+	tests := []struct {
+		name string
+		expr string
+	}{
+		// Single commands
+		{"git log oneline", `bash -c "git log --oneline -10"`},
+		{"git diff stat", `bash -c "git diff --stat"`},
+		{"npx tsc noEmit", `bash -c "npx tsc --noEmit"`},
+		{"tsc direct", `bash -c "tsc --noEmit"`},
+
+		// Pipelines
+		{"double pipe", `bash -c "git log | head -5"`},
+		{"triple pipe", `bash -c "git log | grep feat | head -10"`},
+		{"pipe stderr redir", `bash -c "git log 2>&1 | head -5"`},
+		{"pipe to cat", `bash -c "git status | cat"`},
+		{"pipe stderr devnull", `bash -c "git log 2>/dev/null | head -5"`},
+		{"stderr before pipe", `bash -c "npx tsc --noEmit 2>&1 | grep error | head -20"`},
+
+		// Sequential operators
+		{"semicolon", `bash -c "git fetch; git status"`},
+		{"and chain", `bash -c "git fetch && git status"`},
+		{"or operator", `bash -c "git status || echo failed"`},
+		{"and-or", `bash -c "git fetch && git status || echo failed"`},
+		{"triple and", `bash -c "git fetch && git status && git log | head -5"`},
+		{"semicolons", `bash -c "git fetch; git status; git log | head -5"`},
+
+		// cd patterns
+		{"cd absolute + cmd", `bash -c "cd /tmp && git status"`},
+		{"cd + pipe", `bash -c "cd /tmp && git log | head -5"`},
+		{"cd + stderr pipe", `bash -c "cd /tmp && npx tsc --noEmit 2>&1 | head -20"`},
+		{"cd + redirect /tmp", `bash -c "cd /tmp && git log > output.txt"`},
+		{"cd + append /tmp", `bash -c "cd /tmp && git log >> output.txt"`},
+		{"double cd linear", `bash -c "cd /tmp && echo here && cd /tmp && git status"`},
+		{"cd /home path", `bash -c "cd /home/grs/work && git status"`},
+		{"cd + semicolons", `bash -c "cd /tmp; git status; git log | head -3"`},
+
+		// Redirects
+		{"stdout devnull", `bash -c "git log > /dev/null"`},
+		{"stderr devnull", `bash -c "git status 2>/dev/null"`},
+		{"both devnull", `bash -c "git status > /dev/null 2>&1"`},
+		{"absolute /tmp", `bash -c "git log > /tmp/output.txt"`},
+		{"absolute /tmp append", `bash -c "git log >> /tmp/out.txt"`},
+		{"fd dup 2>&1", `bash -c "git status 2>&1"`},
+		{"fd dup in pipe", `bash -c "git status 2>&1 | cat"`},
+
+		// Loops
+		{"for loop echo", `bash -c "for ns in prod staging; do echo $ns; done"`},
+		{"for loop git", `bash -c "for f in a b; do git status; done"`},
+		{"while read", `bash -c "git log --oneline | while read line; do echo $line; done"`},
+
+		// Conditionals
+		{"if then", `bash -c "if git status; then echo ok; fi"`},
+		{"if then else", `bash -c "if git status; then echo ok; else echo fail; fi"`},
+		{"test builtin", `bash -c "[ -f /tmp/foo ] && git status"`},
+
+		// env prefix
+		{"env prefix cmd", `bash -c "GIT_PAGER=cat git log"`},
+		{"env prefix pipe", `bash -c "CI=1 npx tsc --noEmit 2>&1 | head -10"`},
+
+		// Safe flag combinations
+		{"flag -e", `bash -e -c "git status"`},
+		{"flag -u", `bash -u -c "git status"`},
+		{"flag -x", `bash -x -c "git status"`},
+		{"flag -eu combined", `bash -eu -c "git status"`},
+		{"flag -eux combined", `bash -eux -c "git status"`},
+		{"flag -e -u separate", `bash -e -u -c "git status"`},
+		{"sh -e flag", `sh -e -c "git status"`},
+		{"sh -eu combined", `sh -eu -c "git status"`},
+
+		// sh variant
+		{"sh simple", `sh -c "git status"`},
+		{"sh pipeline", `sh -c "git log | head -5"`},
+		{"sh cd + cmd", `sh -c "cd /tmp && git status"`},
+		{"sh stderr pipe", `sh -c "npx tsc --noEmit 2>&1 | head -10"`},
+
+		// Subshell and substitution
+		{"subshell", `bash -c "(git status)"`},
+		{"subshell pipeline", `bash -c "(git log | head -5)"`},
+		{"command substitution", `bash -c "echo $(git log --oneline -1)"`},
+
+		// Multi-line scripts (literal newlines in -c expression)
+		{"multiline simple", "bash -c \"\ncd /tmp\ngit status\n\""},
+		{"multiline pipeline", "bash -c \"\ngit fetch\ngit log | head -5\n\""},
+		{"multiline cd redirect", "bash -c \"\ncd /tmp\ngit log > output.txt\n\""},
+		{"multiline three steps", "bash -c \"\ncd /tmp\ngit fetch\ngit status\ngit log | head -3\n\""},
+		{"multiline semicolons", "bash -c \"cd /tmp\ngit status; git log | head -5\""},
+		{"multiline with loop", "bash -c \"\nfor ns in prod staging; do\n  echo $ns\n  git status\ndone\n\""},
+
+		// Real-world Claude patterns from audit log
+		{"audit pattern 1", `bash -c "cd /home/grs/work/cloud-infrastructure/product/cloudsql/staging && npx tsc --noEmit 2>&1 | head -20"`},
+		{"audit pattern 2", `bash -c "cd /home/grs/work/cloud-infrastructure/product/cloudsql/staging && npx tsc --noEmit 2>&1 | grep -v '^$' | head -20"`},
+		{"audit pattern 3", `bash -c "cd /home/grs/work/cloud-infrastructure/product/cloudsql/staging && npm install && npx tsc --noEmit 2>&1 | head -30"`},
+		{"audit pattern 4", `bash -c "cd /home/grs/work/some-repo && tsc --noEmit 2>/dev/null && echo ok"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err != nil {
+				t.Errorf("expected allowed, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestBashCBlockedCombinatorial(t *testing.T) {
+	reg, opts := bashShellRegistry()
+	tests := []struct {
+		name string
+		expr string
+	}{
+		// Commands not in registry
+		{"rm", `bash -c "rm -rf /"`},
+		{"curl delete", `bash -c "curl -X DELETE http://api.example.com"`},
+		{"wget", `bash -c "wget http://example.com -O /tmp/x"`},
+		{"unknown in and-chain", `bash -c "git status && rm -rf /tmp/x"`},
+		{"unknown in pipe", `bash -c "git log | rm -rf /"`},
+		{"unknown in loop", `bash -c "for f in a b; do rm $f; done"`},
+		{"unknown in if-then", `bash -c "if true; then rm -f /tmp/x; fi"`},
+
+		// Dangerous builtins
+		{"eval bypass", `bash -c "eval 'git push'"`},
+		{"exec bypass", `bash -c "exec git push"`},
+		{"source bypass", `bash -c "source /etc/profile"`},
+		{"dot bypass", `bash -c ". /etc/profile"`},
+
+		// Dynamic command names
+		{"var as cmd", `bash -c "$CMD git status"`},
+		{"subst as cmd", `bash -c "$(cat /etc/passwd)"`},
+		{"var in pipe", `bash -c "git log | $FILTER"`},
+
+		// bash without -c
+		{"script file", `bash script.sh`},
+		{"absolute script", `bash /home/grs/scripts/deploy.sh`},
+		{"no args", `bash`},
+		{"flag only", `bash -e`},
+
+		// Redirects outside writable_dirs
+		{"to /etc", `bash -c "git log > /etc/out.txt"`},
+		{"to /usr/local", `bash -c "git log > /usr/local/bin/exploit"`},
+		{"to /root", `bash -c "git log > /root/.bashrc"`},
+		{"relative no cd", `bash -c "git log > out.txt"`},
+		{"to /var", `bash -c "git log > /var/log/syslog"`},
+		{"cd + redirect outside", `bash -c "cd /tmp && git log > /etc/out.txt"`},
+
+		// Nested bash with blocked inner
+		{"nested blocked cmd", `bash -c "bash -c 'rm -rf /'"`},
+		{"nested blocked redir", `bash -c "bash -c \"git log > /etc/out.txt\""`},
+
+		// sh blocked
+		{"sh rm", `sh -c "rm -rf /"`},
+		{"sh eval", `sh -c "eval 'something'"`},
+		{"sh no -c", `sh script.sh`},
+
+		// Multiline with blocked content
+		{"multiline blocked cmd", "bash -c \"\ngit status\nrm -rf /\n\""},
+		{"multiline blocked redir", "bash -c \"\ncd /tmp\ngit log > /etc/out.txt\n\""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err == nil {
+				t.Errorf("expected blocked for %q", tt.expr)
+			}
+		})
+	}
+}
+
+func TestBashCCdTrackingCombinatorial(t *testing.T) {
+	reg, opts := bashShellRegistry()
+
+	// Allowed: redirect resolves to writable dir via cd
+	allowedCd := []struct {
+		name string
+		expr string
+	}{
+		{"cd /tmp redirect", `bash -c "cd /tmp && git log > out.txt"`},
+		{"cd /tmp append", `bash -c "cd /tmp && git log >> out.txt"`},
+		{"cd /tmp semicolon redirect", `bash -c "cd /tmp; git log > out.txt"`},
+		{"cd /tmp multiline", "bash -c \"\ncd /tmp\ngit log > out.txt\n\""},
+		{"absolute /tmp always", `bash -c "git log > /tmp/out.txt"`},
+		{"absolute /tmp no cd needed", `bash -c "cd /srv && git log > /tmp/out.txt"`},
+	}
+	for _, tt := range allowedCd {
+		t.Run("allowed/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err != nil {
+				t.Errorf("expected allowed, got: %v", err)
+			}
+		})
+	}
+
+	// Blocked: redirect cannot be resolved to a writable dir
+	blockedCd := []struct {
+		name string
+		expr string
+	}{
+		{"relative no cd", `bash -c "git log > out.txt"`},
+		{"relative cd to non-writable", `bash -c "cd /srv && git log > out.txt"`},
+		{"absolute non-writable", `bash -c "git log > /etc/out.txt"`},
+		{"cd /etc redirect relative", `bash -c "cd /etc && git log > out.txt"`},
+	}
+	for _, tt := range blockedCd {
+		t.Run("blocked/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err == nil {
+				t.Errorf("expected blocked for %q", tt.expr)
+			}
+		})
+	}
+}
+
+func TestBashCCdTildeAndRelative(t *testing.T) {
+	reg, opts := bashShellRegistry()
+
+	// Tilde expansion: cd ~ / cd ~/path resolve to home dir.
+	// home is not in writable_dirs (["/tmp"]) → relative redirect is blocked.
+	// This confirms tilde expansion ran (path resolves to /home/grs/out.txt, not "out.txt").
+	tildeBlocked := []struct {
+		name string
+		expr string
+	}{
+		{"cd ~ redirect home-relative", `bash -c "cd ~ && git log > out.txt"`},
+		{"cd ~/work redirect home-relative", `bash -c "cd ~/work && git log > out.txt"`},
+		{"cd ~/work/repo redirect home-relative", `bash -c "cd ~/work/myrepo && git log > out.txt"`},
+	}
+	for _, tt := range tildeBlocked {
+		t.Run("tilde_blocked/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err == nil {
+				t.Errorf("expected blocked (home not in writable_dirs) for %q", tt.expr)
+			}
+		})
+	}
+
+	// After cd ~/..., absolute /tmp redirects are still fine.
+	tildeAbsAllowed := []struct {
+		name string
+		expr string
+	}{
+		{"cd ~ then absolute /tmp", `bash -c "cd ~ && git log > /tmp/out.txt"`},
+		{"cd ~/work then absolute /tmp", `bash -c "cd ~/work && git log > /tmp/out.txt"`},
+	}
+	for _, tt := range tildeAbsAllowed {
+		t.Run("tilde_abs_allowed/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err != nil {
+				t.Errorf("expected allowed, got: %v", err)
+			}
+		})
+	}
+
+	// Relative cd from a known dir — combines previous cd with relative step.
+	relAllowed := []struct {
+		name string
+		expr string
+	}{
+		{"cd /tmp then subdir redirect", `bash -c "cd /tmp && cd subdir && git log > out.txt"`},
+	}
+	for _, tt := range relAllowed {
+		t.Run("rel_allowed/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err != nil {
+				t.Errorf("expected allowed, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestBashCCdUncertain(t *testing.T) {
+	reg, opts := bashShellRegistry()
+
+	// After cd $VAR, any relative redirect should be blocked.
+	uncertainBlocked := []struct {
+		name string
+		expr string
+	}{
+		{"cd var then relative redirect", `bash -c "cd $WORKDIR && git log > out.txt"`},
+		{"cd var then cmd redirect", `bash -c "cd $DIR; git log > result.txt"`},
+	}
+	for _, tt := range uncertainBlocked {
+		t.Run("uncertain_blocked/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err == nil {
+				t.Errorf("expected blocked (uncertain cwd) for %q", tt.expr)
+			}
+		})
+	}
+
+	// After cd $VAR, absolute redirects are still fine.
+	uncertainAllowedAbsolute := []struct {
+		name string
+		expr string
+	}{
+		{"cd var then absolute /tmp redirect", `bash -c "cd $WORKDIR && git log > /tmp/out.txt"`},
+	}
+	for _, tt := range uncertainAllowedAbsolute {
+		t.Run("uncertain_allowed/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err != nil {
+				t.Errorf("expected allowed (absolute path), got: %v", err)
+			}
+		})
+	}
+}

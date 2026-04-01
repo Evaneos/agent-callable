@@ -48,6 +48,10 @@ func New(gc *config.GlobalConfig, cfgs []config.ConfigTool) *Engine {
 	r.Register(pulumi.New())
 	r.Register(gcloud.New())
 
+	// Shell interpreter builtins (validate -c <expr> recursively)
+	r.Register(spec.NewShellCWrapper("bash"))
+	r.Register(spec.NewShellCWrapper("sh"))
+
 	// Wrapper builtins (delegate to inner command validation)
 	r.Register(spec.NewWrapper("timeout", spec.ExtractAfterFlagsAndN(1, map[string]bool{
 		"-k": true, "--kill-after": true,
@@ -119,7 +123,30 @@ func New(gc *config.GlobalConfig, cfgs []config.ConfigTool) *Engine {
 		}
 	}
 
+	// Inject shell expression validator into shell interpreter tools (bash, sh).
+	shellValidateFn := e.CheckInnerShellFunc()
+	for _, name := range r.Names() {
+		t, ok := r.Get(name)
+		if !ok {
+			continue
+		}
+		if w, ok := t.(interface {
+			SetValidateFunc(func(string) error)
+		}); ok {
+			w.SetValidateFunc(shellValidateFn)
+		}
+	}
+
 	return e
+}
+
+// CheckInnerShellFunc returns a function that validates a shell expression
+// against the engine's registry and options. Injected into shell interpreter tools.
+func (e *Engine) CheckInnerShellFunc() func(expr string) error {
+	return func(expr string) error {
+		_, err := shell.Validate(expr, e.reg, e.ShellValidateOpts())
+		return err
+	}
 }
 
 // Registry returns the tool registry.
