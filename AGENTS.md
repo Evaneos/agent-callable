@@ -39,6 +39,7 @@ For a runtime usage example in another project, see `SAMPLE_CLAUDE.md`.
 - Any allowlist change must be:
   - **tested** (table-driven unit tests),
   - **documented** in `README.md` (supported commands + philosophy/heuristics if needed).
+- After any behavior change: check whether human docs (README.md, `help.txt`) and/or the LLM skill (`plugins/agent-callable/skills/configure.md`) need updating.
 
 ## Git & PR conventions
 
