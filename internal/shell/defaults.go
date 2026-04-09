@@ -249,6 +249,9 @@ allowed = ["version", "tree", "trace", "events", "logs", "get"]
 flags_with_value = ["-n", "--namespace", "--context", "--kubeconfig", "-s", "--server", "--as", "--as-group", "--as-uid", "--cluster", "--cache-dir", "--certificate-authority", "--client-certificate", "--client-key", "--tls-server-name", "--token"]
 [flux.subcommands]
 get = ["all", "kustomizations", "helmreleases", "helmcharts", "helmrepositories", "gitrepositories", "buckets", "ocirepositories", "sources", "alerts", "providers", "receivers", "images", "imagepolicies", "imagerepositories", "imageupdateautomations", "events"]
+
+[chainsaw]
+allowed = ["test", "assert", "lint", "version", "docs", "export", "build", "help", "completion"]
 `,
 
 	"dev-tools.toml": `[make]
@@ -318,6 +321,9 @@ pip = ["list", "show", "check", "tree", "compile"]
 
 [uvx]
 allowed = ["pytest", "mypy", "pyright", "ty", "ruff", "black", "isort", "pylint", "flake8", "bandit", "pip-audit"]
+
+[pytest]
+allowed = ["*"]
 `,
 
 	"system-restricted.toml": `[journalctl]
@@ -346,6 +352,9 @@ allowed = ["list"]
 
 [apt]
 allowed = ["list"]
+
+[brew]
+allowed = ["list", "info", "search", "config", "doctor", "deps", "uses", "desc", "home", "leaves", "outdated", "tap-info", "formulae", "casks"]
 `,
 
 	"concourse.toml": `[fly]
@@ -447,7 +456,7 @@ var Categories = []ConfigCategory{
 	},
 	{
 		Label: "System services",
-		Desc:  "systemctl (read-only), journalctl, ip, apt list, flatpak list...",
+		Desc:  "systemctl (read-only), journalctl, ip, apt list, brew (read-only), flatpak list...",
 		Files: []string{"system-restricted.toml"},
 	},
 	{
