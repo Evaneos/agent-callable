@@ -598,6 +598,211 @@ func bashShellRegistry() (*spec.Registry, ValidateOpts) {
 	return reg, opts
 }
 
+// --- allow_on_any in shell mode tests ---
+
+func TestShellAllowOnAnyUnregisteredToolAllowed(t *testing.T) {
+	reg := testRegistry()
+	opts := ValidateOpts{
+		WritableDirs: []string{"/tmp"},
+		AllowOnAny:   []string{"--version", "--help", "-h", "-v"},
+	}
+
+	allowed := []struct {
+		name string
+		expr string
+	}{
+		{"simple --help", "chainsaw --help"},
+		{"simple --version", "chainsaw --version"},
+		{"short -h", "brew -h"},
+		{"short -v", "claude -v"},
+		{"pipe with allowed tool", "chainsaw --help | head -5"},
+		{"and-chain with allowed tool", "chainsaw --version && echo done"},
+		{"or-chain", "brew --help || echo no-brew"},
+		{"multiple unknown tools", "chainsaw --help && brew --version"},
+		{"in subshell", "(chainsaw --version)"},
+		{"redirect to /tmp", "chainsaw --help > /tmp/out.txt"},
+		{"redirect to /dev/null", "chainsaw --version > /dev/null"},
+		{"stderr redirect", "chainsaw --help 2>&1"},
+		{"pipe stderr", "chainsaw --help 2>&1 | head -5"},
+		{"registered tool then unknown --help", "kubectl get pods && chainsaw --help"},
+		{"unknown --help then registered", "brew --version && kubectl get pods"},
+	}
+	for _, tt := range allowed {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err != nil {
+				t.Errorf("expected allowed, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestShellAllowOnAnyUnregisteredToolBlocked(t *testing.T) {
+	reg := testRegistry()
+	opts := ValidateOpts{
+		WritableDirs: []string{"/tmp"},
+		AllowOnAny:   []string{"--version", "--help"},
+	}
+
+	blocked := []struct {
+		name string
+		expr string
+		want string
+	}{
+		{"subcommand not in list", "chainsaw test .", "not allowed"},
+		{"extra arg after help", "chainsaw --help extra", "not allowed"},
+		{"subcommand before help", "chainsaw test --help", "not allowed"},
+		{"no args", "chainsaw", "not allowed"},
+		{"bare subcommand", "brew install foo", "not allowed"},
+		{"mixed args", "brew search --help", "not allowed"},
+		{"dynamic arg", "chainsaw $FLAG", "not allowed"},
+	}
+	for _, tt := range blocked {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err == nil {
+				t.Errorf("expected blocked for %q", tt.expr)
+				return
+			}
+			if tt.want != "" && !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("expected error containing %q, got %q", tt.want, err.Error())
+			}
+		})
+	}
+}
+
+func TestShellAllowOnAnyEmptyListNoEffect(t *testing.T) {
+	reg := testRegistry()
+	opts := ValidateOpts{
+		WritableDirs: []string{"/tmp"},
+		AllowOnAny:   []string{},
+	}
+
+	_, err := Validate("chainsaw --help", reg, opts)
+	if err == nil {
+		t.Error("expected blocked when AllowOnAny is empty")
+	}
+}
+
+func TestShellAllowOnAnyNilListNoEffect(t *testing.T) {
+	reg := testRegistry()
+	opts := ValidateOpts{
+		WritableDirs: []string{"/tmp"},
+		AllowOnAny:   nil,
+	}
+
+	_, err := Validate("chainsaw --help", reg, opts)
+	if err == nil {
+		t.Error("expected blocked when AllowOnAny is nil")
+	}
+}
+
+func TestShellAllowOnAnyRegisteredToolShortCircuit(t *testing.T) {
+	reg := testRegistry()
+	opts := ValidateOpts{
+		WritableDirs: []string{"/tmp"},
+		AllowOnAny:   []string{"--help", "--version"},
+		CheckFunc: func(name string, args []string) error {
+			if name == "kubectl" {
+				return fmt.Errorf("kubectl: blocked by strict policy")
+			}
+			return nil
+		},
+	}
+
+	// allow_on_any should short-circuit before CheckFunc is called.
+	_, err := Validate("kubectl --help", reg, opts)
+	if err != nil {
+		t.Errorf("expected allowed (allow_on_any short-circuit), got: %v", err)
+	}
+
+	// But kubectl get pods should still go through CheckFunc and be blocked.
+	_, err = Validate("kubectl get pods", reg, opts)
+	if err == nil {
+		t.Error("expected blocked by CheckFunc for kubectl get pods")
+	}
+}
+
+func TestShellAllowOnAnyInBashC(t *testing.T) {
+	reg, opts := bashShellRegistry()
+	opts.AllowOnAny = []string{"--help", "--version"}
+
+	// Re-wire the shell validator with AllowOnAny.
+	bashWrapper, _ := reg.Get("bash")
+	shWrapper, _ := reg.Get("sh")
+	shellValidateFn := func(expr string) error {
+		_, err := Validate(expr, reg, opts)
+		return err
+	}
+	bashWrapper.(interface{ SetValidateFunc(func(string) error) }).SetValidateFunc(shellValidateFn)
+	shWrapper.(interface{ SetValidateFunc(func(string) error) }).SetValidateFunc(shellValidateFn)
+
+	allowed := []struct {
+		name string
+		expr string
+	}{
+		{"bash -c unknown --help", `bash -c "chainsaw --help"`},
+		{"bash -c unknown --version", `bash -c "brew --version"`},
+		{"bash -c unknown --help pipe", `bash -c "chainsaw --help 2>&1 | head -5"`},
+		{"bash -c cd + unknown --help", `bash -c "cd /tmp && chainsaw --help"`},
+		{"sh -c unknown --help", `sh -c "chainsaw --help"`},
+		{"bash -c mixed allowed", `bash -c "git status && chainsaw --help"`},
+	}
+	for _, tt := range allowed {
+		t.Run("allowed/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err != nil {
+				t.Errorf("expected allowed, got: %v", err)
+			}
+		})
+	}
+
+	blocked := []struct {
+		name string
+		expr string
+	}{
+		{"bash -c unknown subcommand", `bash -c "chainsaw test ."`},
+		{"bash -c unknown bare", `bash -c "chainsaw"`},
+		{"bash -c unknown mixed args", `bash -c "brew search --help"`},
+	}
+	for _, tt := range blocked {
+		t.Run("blocked/"+tt.name, func(t *testing.T) {
+			_, err := Validate(tt.expr, reg, opts)
+			if err == nil {
+				t.Errorf("expected blocked for %q", tt.expr)
+			}
+		})
+	}
+}
+
+func TestShellAllowOnAnyDoesNotAddToToolNames(t *testing.T) {
+	reg := testRegistry()
+	opts := ValidateOpts{
+		WritableDirs: []string{"/tmp"},
+		AllowOnAny:   []string{"--help", "--version"},
+	}
+
+	result, err := Validate("chainsaw --help && kubectl get pods", reg, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, name := range result.ToolNames {
+		if name == "chainsaw" {
+			t.Error("chainsaw should not appear in ToolNames (it's not a registered tool)")
+		}
+	}
+	found := false
+	for _, name := range result.ToolNames {
+		if name == "kubectl" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected kubectl in ToolNames")
+	}
+}
+
 func TestBashCAllowed(t *testing.T) {
 	reg, opts := bashShellRegistry()
 	tests := []struct {

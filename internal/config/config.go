@@ -29,6 +29,7 @@ type AuditConfig struct {
 // GlobalConfig is loaded from config.toml (not tools.d/).
 type GlobalConfig struct {
 	WritableDirs []string        `toml:"writable_dirs"`
+	AllowOnAny   []string        `toml:"allow_on_any"`
 	Audit        AuditConfig     `toml:"audit"`
 	Builtins     map[string]bool `toml:"builtins"`
 }

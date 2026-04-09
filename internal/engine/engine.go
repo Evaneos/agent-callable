@@ -175,6 +175,7 @@ func (e *Engine) ShellValidateOpts() shell.ValidateOpts {
 	return shell.ValidateOpts{
 		WritableDirs: e.globalConfig.WritableDirs,
 		CheckFunc:    e.CheckInnerFunc(),
+		AllowOnAny:   e.globalConfig.AllowOnAny,
 	}
 }
 
@@ -265,6 +266,12 @@ func (e *Engine) Check(args []string) CheckResult {
 		return CheckResult{Tool: tool, Args: toolArgs, ExitCode: 2, Reason: "agent-callable: invalid arguments (control characters)"}
 	}
 
+	// allow_on_any: universal short-circuit for harmless flags (e.g. --help, --version).
+	// Applies to ALL tools (registered or not) before any tool-specific check.
+	if e.allowedOnAny(toolArgs) {
+		return CheckResult{Allowed: true, Tool: tool, Args: toolArgs}
+	}
+
 	t, ok := e.reg.Get(tool)
 	if !ok {
 		allowed := e.reg.Names()
@@ -341,6 +348,25 @@ func (e *Engine) ListTools() []ToolEntry {
 		entries[i] = ToolEntry{Name: name, Source: source}
 	}
 	return entries
+}
+
+// allowedOnAny returns true if all args are in the GlobalConfig.AllowOnAny list
+// and that list is non-empty. Used to allow universally harmless flags (e.g.
+// --version, --help) on unregistered tools.
+func (e *Engine) allowedOnAny(args []string) bool {
+	if len(e.globalConfig.AllowOnAny) == 0 || len(args) == 0 {
+		return false
+	}
+	allowed := make(map[string]bool, len(e.globalConfig.AllowOnAny))
+	for _, a := range e.globalConfig.AllowOnAny {
+		allowed[a] = true
+	}
+	for _, arg := range args {
+		if !allowed[arg] {
+			return false
+		}
+	}
+	return true
 }
 
 func upsertEnv(env []string, key, value string) []string {
