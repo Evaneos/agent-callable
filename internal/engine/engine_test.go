@@ -640,6 +640,326 @@ func TestExtendModePreservesListToolsSource(t *testing.T) {
 	t.Error("gh not found in ListTools")
 }
 
+// --- allow_on_any tests ---
+
+func TestAllowOnAnyUnknownToolVersionAllowed(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{"--version", "-v", "--help", "-h"},
+	}
+	e := New(gc, nil)
+
+	for _, args := range [][]string{
+		{"claude", "--version"},
+		{"claude", "-v"},
+		{"some-unknown-tool", "--help"},
+		{"some-unknown-tool", "-h"},
+	} {
+		cr := e.Check(args)
+		if !cr.Allowed {
+			t.Errorf("expected allowed for %v, got blocked: %s", args, cr.Reason)
+		}
+	}
+}
+
+func TestAllowOnAnyUnknownToolExtraArgBlocked(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{"--version", "--help"},
+	}
+	e := New(gc, nil)
+
+	for _, args := range [][]string{
+		{"claude", "--version", "extra"},
+		{"claude", "subcommand"},
+		{"claude", "--help", "subcommand"},
+	} {
+		cr := e.Check(args)
+		if cr.Allowed {
+			t.Errorf("expected blocked for %v (extra arg outside allow_on_any)", args)
+		}
+	}
+}
+
+func TestAllowOnAnyEmptyArgsBlocked(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{"--version", "--help"},
+	}
+	e := New(gc, nil)
+
+	cr := e.Check([]string{"claude"})
+	if cr.Allowed {
+		t.Error("expected blocked for unknown tool with no args (allow_on_any requires at least one arg)")
+	}
+}
+
+func TestAllowOnAnyEmptyListBlocked(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{},
+	}
+	e := New(gc, nil)
+
+	cr := e.Check([]string{"claude", "--version"})
+	if cr.Allowed {
+		t.Error("expected blocked when allow_on_any is empty")
+	}
+}
+
+func TestAllowOnAnyDoesNotShortCircuitWithNonListArgs(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{"--version", "delete"},
+	}
+	e := New(gc, nil)
+
+	cr := e.Check([]string{"kubectl", "delete", "pod", "x"})
+	if cr.Allowed {
+		t.Error("expected kubectl delete pod x blocked (pod and x not in allow_on_any)")
+	}
+}
+
+func TestAllowOnAnyRegisteredToolHelpAllowed(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{"--version", "--help"},
+	}
+	e := New(gc, nil)
+
+	for _, args := range [][]string{
+		{"git", "--help"},
+		{"git", "--version"},
+		{"kubectl", "--help"},
+		{"kubectl", "--version"},
+		{"docker", "--help"},
+		{"gh", "--version"},
+		{"npm", "--help"},
+		{"pulumi", "--version"},
+		{"gcloud", "--help"},
+	} {
+		cr := e.Check(args)
+		if !cr.Allowed {
+			t.Errorf("expected allowed for %v, got blocked: %s", args, cr.Reason)
+		}
+	}
+}
+
+func TestAllowOnAnyRegisteredToolMixedArgsBlocked(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{"--version", "--help"},
+	}
+	e := New(gc, nil)
+
+	for _, args := range [][]string{
+		{"kubectl", "delete", "--help"},
+		{"kubectl", "--help", "pod"},
+		{"docker", "rm", "--help"},
+		{"npm", "install", "--version"},
+	} {
+		cr := e.Check(args)
+		if cr.Allowed {
+			t.Errorf("expected blocked for %v (mixed args with non-allow_on_any values)", args)
+		}
+	}
+}
+
+func TestAllowOnAnyRegisteredToolNoArgsNotShortCircuited(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{"--version", "--help"},
+	}
+	e := New(gc, nil)
+
+	// Bare "git" has no args, so allow_on_any does not apply (requires >= 1 arg).
+	// It falls through to the normal tool check, which blocks "git" (requires a subcommand).
+	cr := e.Check([]string{"git"})
+	if cr.Allowed {
+		t.Error("expected git with no args blocked (git requires a subcommand)")
+	}
+}
+
+func TestAllowOnAnyMultipleFlagsAllInList(t *testing.T) {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: []string{"--version", "--help", "-h", "-v"},
+	}
+	e := New(gc, nil)
+
+	for _, args := range [][]string{
+		{"kubectl", "--help", "--version"},
+		{"kubectl", "-h", "-v"},
+		{"unknown-tool", "--help", "--version"},
+		{"unknown-tool", "-h"},
+	} {
+		cr := e.Check(args)
+		if !cr.Allowed {
+			t.Errorf("expected allowed for %v (all args in allow_on_any), got blocked: %s", args, cr.Reason)
+		}
+	}
+}
+
+// --- allow_on_any integration tests (shell mode via CheckInnerShellFunc) ---
+
+func newAllowOnAnyEngine(allowOnAny []string) *Engine {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsEnabled(),
+		AllowOnAny: allowOnAny,
+	}
+	return New(gc, nil)
+}
+
+// allBuiltinsWithShell includes bash/sh so bash -c tests work through the engine.
+func allBuiltinsWithShell() map[string]bool {
+	m := allBuiltinsEnabled()
+	m["bash"] = true
+	m["sh"] = true
+	return m
+}
+
+func newAllowOnAnyEngineWithShell(allowOnAny []string) *Engine {
+	gc := &config.GlobalConfig{
+		Builtins:   allBuiltinsWithShell(),
+		AllowOnAny: allowOnAny,
+	}
+	return New(gc, nil)
+}
+
+func TestAllowOnAnyShellModeUnregistered(t *testing.T) {
+	e := newAllowOnAnyEngine([]string{"--version", "--help", "-h", "-v"})
+	validateShell := e.CheckInnerShellFunc()
+
+	allowed := []string{
+		"chainsaw --help",
+		"brew --version",
+		"claude -v",
+		"unknown-tool -h",
+		"chainsaw --version && echo done",
+		"git status && chainsaw --help",
+		"chainsaw --version && brew --help",
+	}
+	for _, expr := range allowed {
+		if err := validateShell(expr); err != nil {
+			t.Errorf("expected allowed for %q, got: %v", expr, err)
+		}
+	}
+
+	blocked := []string{
+		"chainsaw test .",
+		"chainsaw",
+		"brew install foo",
+		"brew search --help",
+		"chainsaw test --help",
+		"unknown-tool subcommand",
+	}
+	for _, expr := range blocked {
+		if err := validateShell(expr); err == nil {
+			t.Errorf("expected blocked for %q", expr)
+		}
+	}
+}
+
+func TestAllowOnAnyShellModeRegistered(t *testing.T) {
+	e := newAllowOnAnyEngine([]string{"--version", "--help"})
+	validateShell := e.CheckInnerShellFunc()
+
+	allowed := []string{
+		"kubectl --help",
+		"git --version",
+		"docker --help",
+		"kubectl --help && git --version",
+	}
+	for _, expr := range allowed {
+		if err := validateShell(expr); err != nil {
+			t.Errorf("expected allowed for %q, got: %v", expr, err)
+		}
+	}
+
+	blocked := []string{
+		"kubectl delete --help",
+		"docker rm --help",
+	}
+	for _, expr := range blocked {
+		if err := validateShell(expr); err == nil {
+			t.Errorf("expected blocked for %q", expr)
+		}
+	}
+}
+
+func TestAllowOnAnyShellModeBashC(t *testing.T) {
+	e := newAllowOnAnyEngineWithShell([]string{"--version", "--help"})
+
+	bashCases := []struct {
+		args    []string
+		allowed bool
+	}{
+		{[]string{"bash", "-c", "chainsaw --help"}, true},
+		{[]string{"bash", "-c", "brew --version"}, true},
+		{[]string{"bash", "-c", "chainsaw --help 2>&1"}, true},
+		{[]string{"bash", "-c", "git status && chainsaw --help"}, true},
+		{[]string{"bash", "-c", "chainsaw test ."}, false},
+		{[]string{"bash", "-c", "chainsaw"}, false},
+		{[]string{"bash", "-c", "brew install foo"}, false},
+	}
+	for _, tc := range bashCases {
+		cr := e.Check(tc.args)
+		if tc.allowed && !cr.Allowed {
+			t.Errorf("expected allowed for %v, got blocked: %s", tc.args, cr.Reason)
+		}
+		if !tc.allowed && cr.Allowed {
+			t.Errorf("expected blocked for %v", tc.args)
+		}
+	}
+}
+
+func TestAllowOnAnyShellModeEdgeCases(t *testing.T) {
+	e := newAllowOnAnyEngine([]string{"--version", "--help"})
+	validateShell := e.CheckInnerShellFunc()
+
+	// Registered tool with only allow_on_any flags (no pipeline — head is not registered)
+	if err := validateShell("kubectl --help"); err != nil {
+		t.Errorf("expected allowed for kubectl --help, got: %v", err)
+	}
+
+	// allow_on_any with variable expansion as arg — blocked (non-literal)
+	if err := validateShell("chainsaw $FLAG"); err == nil {
+		t.Error("expected blocked for dynamic arg on unregistered tool")
+	}
+
+	// Unknown tool with quoted --help
+	if err := validateShell(`chainsaw "--help"`); err != nil {
+		t.Errorf("expected allowed for quoted --help, got: %v", err)
+	}
+
+	// Unknown tool with single-quoted --help
+	if err := validateShell(`chainsaw '--help'`); err != nil {
+		t.Errorf("expected allowed for single-quoted --help, got: %v", err)
+	}
+}
+
+func TestAllowOnAnyWrapperIntegration(t *testing.T) {
+	e := newAllowOnAnyEngine([]string{"--version", "--help"})
+
+	// timeout wrapping unknown tool with --help
+	cr := e.Check([]string{"timeout", "5", "chainsaw", "--help"})
+	if !cr.Allowed {
+		t.Errorf("expected allowed for timeout wrapping chainsaw --help, got: %s", cr.Reason)
+	}
+
+	// timeout wrapping unknown tool with subcommand — blocked
+	cr = e.Check([]string{"timeout", "5", "chainsaw", "test", "."})
+	if cr.Allowed {
+		t.Error("expected blocked for timeout wrapping chainsaw test")
+	}
+
+	// nice wrapping unknown tool --version
+	cr = e.Check([]string{"nice", "chainsaw", "--version"})
+	if !cr.Allowed {
+		t.Errorf("expected allowed for nice wrapping chainsaw --version, got: %s", cr.Reason)
+	}
+}
+
 func TestExtendModeNonInteractiveEnvPreserved(t *testing.T) {
 	ghExtend := config.ConfigTool{
 		ToolConfig: config.ToolConfig{

@@ -19,6 +19,7 @@ type Result struct {
 type ValidateOpts struct {
 	WritableDirs []string                               // directories where > and >> are allowed
 	CheckFunc    func(name string, args []string) error // optional per-command argument check
+	AllowOnAny   []string                               // flags universally allowed on any command
 }
 
 // Validate parses a shell expression and checks that all commands are allowed.
@@ -113,6 +114,10 @@ func Validate(expr string, reg *spec.Registry, opts ValidateOpts) (*Result, erro
 			}
 
 			if !isAllowed(name, localFuncs, reg) {
+				// allow_on_any: universally safe flags on unregistered commands.
+				if shellAllowedOnAny(n.Args, opts.AllowOnAny) {
+					return true
+				}
 				if dangerousBuiltins[name] {
 					walkErr = fmt.Errorf("dangerous builtin %q blocked", name)
 				} else {
@@ -122,6 +127,14 @@ func Validate(expr string, reg *spec.Registry, opts ValidateOpts) (*Result, erro
 			}
 
 			if _, ok := reg.Get(name); ok {
+				// allow_on_any short-circuit for registered tools:
+				// skip CheckFunc when all args are universally safe.
+				if shellAllowedOnAny(n.Args, opts.AllowOnAny) {
+					if !toolSet[name] {
+						toolSet[name] = true
+					}
+					return true
+				}
 				if opts.CheckFunc != nil {
 					cmdArgs := make([]string, 0, len(n.Args)-1)
 					for _, a := range n.Args[1:] {
@@ -271,4 +284,24 @@ func checkRedirect(redir *syntax.Redirect, opts ValidateOpts, currentDir string,
 	}
 
 	return nil
+}
+
+// shellAllowedOnAny checks if all literal args of a CallExpr are in the AllowOnAny list.
+// Returns false if any arg is non-literal (variable, substitution), if there are no args
+// beyond the command name, or if AllowOnAny is empty.
+func shellAllowedOnAny(args []*syntax.Word, allowList []string) bool {
+	if len(allowList) == 0 || len(args) <= 1 {
+		return false
+	}
+	allowed := make(map[string]bool, len(allowList))
+	for _, a := range allowList {
+		allowed[a] = true
+	}
+	for _, w := range args[1:] {
+		lit := wordLit(w)
+		if lit == "" || !allowed[lit] {
+			return false
+		}
+	}
+	return true
 }

@@ -109,6 +109,12 @@ Global config (config.toml)
                                - tools with write_target: destination args
                                /dev/null is always allowed (hardcoded).
 
+  allow_on_any = []            Args always allowed on any binary, even unregistered ones.
+                               Useful for universally harmless flags:
+                               allow_on_any = ["--version", "--help"]
+                               A command passes only if ALL its args are in this list.
+                               Empty by default (deny-by-default is preserved).
+
   [audit]                      Audit trail (disabled by default).
   file = "/path/to/audit.log"  Log file path (parent dir created automatically).
   mode = "none"                "none" (disabled), "blocked", "allowed", or "all".
