@@ -120,7 +120,7 @@ Out of the box, agent-callable ships with built-in filters for 12+ CLI tools. Ea
 - **kustomize** — `build` + `cfg` read-only
 - **gcloud** — conservative allowlist (list/describe/get/show/read/logs)
 - **npm** — read-only + `install/ci` with `--ignore-scripts` + `run` restricted to safe scripts (test, lint, build, etc.)
-- **kubectx**, **kubectl-crossplane**, **krew** — read-only
+- **kubectx**, **kubectl-crossplane**, **krew**, **chainsaw** — read-only
 - **bash**, **sh** — shell interpreter wrappers: only `-c <expr>` form allowed; the inner expression is recursively validated against the same policy, with `cd`-aware resolution of relative write destinations
 - **xargs**, **timeout**, **nice** — wrapper tools: validate the inner command recursively against the same policy
 
@@ -131,7 +131,7 @@ Beyond built-ins, default TOML configs add:
 - **Cloud & CI/CD** — `gsutil` read-only (`ls/cat/stat`, `acl get`, `lifecycle get`, etc.), `terraform` (plan/validate/show), `fly` (Concourse, read-only)
 - **TypeScript** — `tsc`, `eslint` (`--fix` triggers `writable_dirs`), `prettier` (`--write` triggers `writable_dirs`)
 - **Go** — `gofmt` (`-w` triggers `writable_dirs`), `go` (test/build/vet/mod/...)
-- **Python** — `ruff` (`--fix` triggers `writable_dirs`), `uv` (`run` restricted to safe commands like pytest/mypy/ruff), `uvx` (same allowlist as `uv run`), `ty`
+- **Python** — `ruff` (`--fix` triggers `writable_dirs`), `uv` (`run` restricted to safe commands like pytest/mypy/ruff), `uvx` (same allowlist as `uv run`), `ty`, `pytest`
 - And many more (filesystem, network, system info, etc.) — see `agent-callable --list-tools`
 
 ---
@@ -181,6 +181,7 @@ Built-in tools always take priority over config files. User configs can also use
 
 ```toml
 writable_dirs = ["/tmp"]     # enforced on: redirects, docker volumes, write_target tools
+allow_on_any = ["--version", "--help"]   # universal short-circuit: allowed on ANY tool (registered or not, direct or --sh)
 
 [audit]
 file = "~/.local/share/agent-callable/audit.log"  # parent dir auto-created

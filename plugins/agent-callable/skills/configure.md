@@ -118,6 +118,7 @@ allowed = ["apply"]
 
 ```toml
 writable_dirs = ["/tmp"]
+allow_on_any = ["--version", "--help"]   # universal short-circuit: these flags are allowed on ANY tool (registered or not)
 
 [audit]
 file = "~/.local/share/agent-callable/audit.log"
