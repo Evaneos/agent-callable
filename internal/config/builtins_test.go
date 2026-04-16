@@ -162,6 +162,22 @@ var writeFlagTests = []writeFlagTestCase{
 			{"-w", "/etc/file.ts"},
 		},
 	},
+	{
+		tool: "goimports",
+		readOnly: [][]string{
+			{"-l", "."},
+			{"-d", "main.go"},
+			{"-local", "github.com/me", "main.go"},
+			{"main.go"},
+		},
+		writeAllowed: [][]string{
+			{"-w", "/tmp/main.go"},
+			{"-w", "-local", "github.com/me", "/tmp/main.go"},
+		},
+		writeBlocked: [][]string{
+			{"-w", "/etc/main.go"},
+		},
+	},
 }
 
 func TestDefaultWriteFlagTools(t *testing.T) {
@@ -856,6 +872,77 @@ func TestDefaultNpxBlocksArbitrary(t *testing.T) {
 		{"rimraf", "dist"},
 		{"cowsay", "hello"},
 		{"ts-node", "script.ts"},
+	}
+	spectest.AssertBlockedBatch(t, tool, blocked)
+}
+
+// --- staticcheck (allow_all, read-only in go.toml) ---
+
+func TestDefaultStaticcheckAllowsAnyArgs(t *testing.T) {
+	tool := loadDefaultTool(t, "staticcheck")
+	cases := [][]string{
+		{"./..."},
+		{"-checks", "all", "./..."},
+		{"-explain", "SA1000"},
+		{"-f", "json", "./..."},
+		{"-go", "1.25", "./..."},
+		{"-tags", "integration", "./..."},
+	}
+	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+// --- deadcode (allow_all, read-only in go.toml) ---
+
+func TestDefaultDeadcodeAllowsAnyArgs(t *testing.T) {
+	tool := loadDefaultTool(t, "deadcode")
+	cases := [][]string{
+		{"./..."},
+		{"-test", "./..."},
+		{"-filter", "main", "./..."},
+		{"-tags", "integration", "./..."},
+		{"-json", "./..."},
+	}
+	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+// --- govulncheck (allow_all, read-only in go.toml) ---
+
+func TestDefaultGovulncheckAllowsAnyArgs(t *testing.T) {
+	tool := loadDefaultTool(t, "govulncheck")
+	cases := [][]string{
+		{"./..."},
+		{"-format", "json", "./..."},
+		{"-mode", "binary", "./bin/app"},
+		{"-show", "traces", "./..."},
+		{"-test", "./..."},
+	}
+	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+// --- golangci-lint (restricted allowlist in go.toml) ---
+
+func TestDefaultGolangciLintAllowsSafeSubcommands(t *testing.T) {
+	tool := loadDefaultTool(t, "golangci-lint")
+	cases := [][]string{
+		{"run"},
+		{"run", "./..."},
+		{"run", "-c", ".golangci.yml", "./..."},
+		{"run", "--enable", "errcheck", "./..."},
+		{"run", "--timeout", "5m", "./..."},
+		{"linters"},
+		{"version"},
+		{"config"},
+		{"cache", "status"},
+	}
+	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+func TestDefaultGolangciLintBlocksUnsafeSubcommands(t *testing.T) {
+	tool := loadDefaultTool(t, "golangci-lint")
+	blocked := [][]string{
+		{"fmt"},     // v2 fmt subcommand writes files
+		{"migrate"}, // rewrites .golangci.yml
+		{"custom"},
 	}
 	spectest.AssertBlockedBatch(t, tool, blocked)
 }

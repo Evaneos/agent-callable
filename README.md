@@ -130,7 +130,7 @@ Beyond built-ins, default TOML configs add:
 - **Text processing** — `sed`, `yq` with conditional write checking (`-i` triggers `writable_dirs`)
 - **Cloud & CI/CD** — `gsutil` read-only (`ls/cat/stat`, `acl get`, `lifecycle get`, etc.), `terraform` (plan/validate/show), `fly` (Concourse, read-only)
 - **TypeScript** — `tsc`, `eslint` (`--fix` triggers `writable_dirs`), `prettier` (`--write` triggers `writable_dirs`)
-- **Go** — `gofmt` (`-w` triggers `writable_dirs`), `go` (test/build/vet/mod/...)
+- **Go** — `gofmt`/`goimports` (`-w` triggers `writable_dirs`), `go` (test/build/vet/mod/...), `staticcheck`, `deadcode`, `golangci-lint` (read-only: `run`, `linters`, `cache`, `config`), `govulncheck`
 - **Python** — `ruff` (`--fix` triggers `writable_dirs`), `uv` (`run` restricted to safe commands like pytest/mypy/ruff), `uvx` (same allowlist as `uv run`), `ty`, `pytest`
 - And many more (filesystem, network, system info, etc.) — see `agent-callable --list-tools`
 

@@ -288,11 +288,33 @@ allowed = ["*"]
 write_flags = ["-w"]
 write_target = "all"
 
+[goimports]
+allowed = ["*"]
+write_flags = ["-w"]
+write_target = "all"
+flags_with_value = ["-local", "-srcdir"]
+
 [go]
 allowed = ["test", "build", "vet", "fmt", "mod", "generate", "doc", "version", "env", "list", "tool"]
 
 [goreleaser]
 allowed = ["check", "build"]
+
+[staticcheck]
+allowed = ["*"]
+flags_with_value = ["-checks", "-explain", "-fail", "-f", "-formatter", "-go", "-tags"]
+
+[deadcode]
+allowed = ["*"]
+flags_with_value = ["-filter", "-tags", "-cpuprofile", "-memprofile"]
+
+[golangci-lint]
+allowed = ["run", "linters", "version", "cache", "config", "help", "completion"]
+flags_with_value = ["-c", "--config", "--out-format", "--timeout", "--enable", "--disable", "--enable-only", "--issues-exit-code", "--max-issues-per-linter", "--max-same-issues", "-j", "--concurrency", "--build-tags", "--path-prefix"]
+
+[govulncheck]
+allowed = ["*"]
+flags_with_value = ["-format", "-mode", "-show", "-tags", "-C"]
 `,
 
 	"rust.toml": `[cargo]
@@ -495,7 +517,7 @@ var Categories = []ConfigCategory{
 	},
 	{
 		Label: "Go",
-		Desc:  "go test/build/vet/mod/..., gofmt, goreleaser (check/build)",
+		Desc:  "go test/build/vet/mod/..., gofmt, goimports, staticcheck, deadcode, golangci-lint (read-only), govulncheck, goreleaser",
 		Files: []string{"go.toml"},
 	},
 	{
