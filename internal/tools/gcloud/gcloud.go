@@ -34,7 +34,7 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 	}
 
 	// Block common write verbs when they appear as a non-flag token.
-	if spec.ContainsAnyNonFlag(args, gcloudGlobalFlagsWithValue, "create", "delete", "update", "set", "unset", "enable", "disable", "deploy", "run", "start", "stop", "restart", "rollback", "apply", "add-iam-policy-binding", "remove-iam-policy-binding", "reset", "move", "insert", "import", "export", "patch", "remove", "resize", "suspend", "resume") {
+	if spec.ContainsAnyNonFlag(args, gcloudGlobalFlagsWithValue, "create", "delete", "update", "set", "unset", "enable", "disable", "deploy", "run", "start", "stop", "restart", "rollback", "apply", "add-iam-policy-binding", "remove-iam-policy-binding", "set-iam-policy", "reset", "move", "insert", "import", "export", "patch", "remove", "resize", "suspend", "resume") {
 		return spec.Deny("potentially destructive gcloud command (write verb detected)")
 	}
 

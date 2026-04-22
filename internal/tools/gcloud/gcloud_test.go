@@ -120,6 +120,8 @@ func TestGcloudEdgeCases(t *testing.T) {
 		{"iam", "service-accounts", "delete", "sa@proj.iam.gserviceaccount.com"},
 		{"projects", "add-iam-policy-binding", "myproj"},
 		{"projects", "remove-iam-policy-binding", "myproj"},
+		{"projects", "set-iam-policy", "myproj", "policy.json"},
+		{"iam", "service-accounts", "set-iam-policy", "sa@proj.iam.gserviceaccount.com", "policy.json"},
 		// Storage write
 		{"storage", "buckets", "create", "mybucket"},
 		{"storage", "buckets", "delete", "mybucket"},
