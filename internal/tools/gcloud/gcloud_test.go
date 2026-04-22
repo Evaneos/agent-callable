@@ -83,6 +83,26 @@ func TestGcloudEdgeCases(t *testing.T) {
 		{"iam", "roles", "describe", "roles/editor"},
 		{"iam", "service-accounts", "list"},
 		{"iam", "service-accounts", "describe", "sa@proj.iam.gserviceaccount.com"},
+		// IAM policy read
+		{"projects", "get-iam-policy", "odys-production"},
+		{"projects", "get-iam-policy", "myproj", "--flatten=bindings[].members", "--filter=bindings.members:group:foo@example.com", "--format=table(bindings.role)"},
+		{"iam", "service-accounts", "get-iam-policy", "sa@proj.iam.gserviceaccount.com"},
+		{"projects", "test-iam-permissions", "myproj", "--permissions=resourcemanager.projects.get"},
+		// get-* hyphenated getters (read-only by gcloud convention)
+		{"projects", "get-ancestors", "myproj"},
+		{"projects", "get-ancestors-iam-policy", "myproj"},
+		{"compute", "networks", "get-effective-firewalls", "default"},
+		{"iam", "service-accounts", "keys", "get-public-key", "keyid", "--iam-account=sa@proj.iam.gserviceaccount.com"},
+		// list-* hyphenated listers
+		{"iam", "list-testable-permissions", "//cloudresourcemanager.googleapis.com/projects/myproj"},
+		{"iam", "list-grantable-roles", "//cloudresourcemanager.googleapis.com/projects/myproj"},
+		{"compute", "networks", "subnets", "list-usable"},
+		// search-* (Cloud Asset Inventory)
+		{"asset", "search-all-resources", "--scope=projects/myproj"},
+		{"asset", "search-all-iam-policies", "--scope=projects/myproj"},
+		// tail (streaming logs) and wait (block on operation)
+		{"logging", "tail", "resource.type=gce_instance"},
+		{"compute", "operations", "wait", "op-123", "--zone=europe-west1-b"},
 		// Deeply nested describe
 		{"compute", "networks", "peerings", "list", "--network=default"},
 		// Multiple global flags
@@ -120,6 +140,18 @@ func TestGcloudEdgeCases(t *testing.T) {
 		{"iam", "service-accounts", "delete", "sa@proj.iam.gserviceaccount.com"},
 		{"projects", "add-iam-policy-binding", "myproj"},
 		{"projects", "remove-iam-policy-binding", "myproj"},
+		{"projects", "set-iam-policy", "myproj", "policy.json"},
+		{"iam", "service-accounts", "set-iam-policy", "sa@proj.iam.gserviceaccount.com", "policy.json"},
+		// Credential exfiltration (print-* under auth) blocked by auth allowlist
+		{"auth", "print-access-token"},
+		{"auth", "print-identity-token"},
+		// sign-* uses service-account credentials — not a getter, stays blocked
+		{"iam", "service-accounts", "sign-blob", "sa@proj.iam.gserviceaccount.com", "input.txt", "out.sig"},
+		{"iam", "service-accounts", "sign-jwt", "sa@proj.iam.gserviceaccount.com", "payload.json", "out.jwt"},
+		// Hyphenated writes that must NOT be mistaken for read verbs
+		{"compute", "instances", "detach-disk", "myinst", "--disk=d1"},
+		{"compute", "instances", "attach-disk", "myinst", "--disk=d1"},
+		{"compute", "instance-groups", "managed", "set-autoscaling", "mygroup"},
 		// Storage write
 		{"storage", "buckets", "create", "mybucket"},
 		{"storage", "buckets", "delete", "mybucket"},
