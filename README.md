@@ -118,7 +118,7 @@ Out of the box, agent-callable ships with built-in filters for 12+ CLI tools. Ea
 - **pulumi** — info + `preview` (auto-injects `--non-interactive`), blocks `--show-secrets`
 - **helm** — read-only (`list/status/history/get/show/template/lint/search`)
 - **kustomize** — `build` + `cfg` read-only
-- **gcloud** — conservative allowlist (list/describe/get/show/read/logs)
+- **gcloud** — conservative allowlist (list/describe/get-*/list-*/search/show/read/logs/tail/wait)
 - **npm** — read-only + `install/ci` with `--ignore-scripts` + `run` restricted to safe scripts (test, lint, build, etc.)
 - **kubectx**, **kubectl-crossplane**, **krew**, **chainsaw** — read-only
 - **bash**, **sh** — shell interpreter wrappers: only `-c <expr>` form allowed; the inner expression is recursively validated against the same policy, with `cd`-aware resolution of relative write destinations

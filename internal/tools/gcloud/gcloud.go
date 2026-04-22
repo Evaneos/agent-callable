@@ -68,12 +68,28 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 	return spec.Deny(fmt.Sprintf("no read-only verb detected in: gcloud %s", strings.Join(tokens, " ")))
 }
 
+// isVerbAllowed reports whether a positional token is a known read-only gcloud verb.
+// Recognized forms:
+//   - explicit verbs: list, describe, get, show, read, logs, tail, wait, search
+//   - hyphenated getters: get-value, get-credentials, get-iam-policy,
+//     get-ancestors, get-effective-firewalls, ... (any "get-*")
+//   - hyphenated listers: list-testable-permissions, list-grantable-roles,
+//     list-usable-subnets, ... (any "list-*")
+//   - hyphenated describers: any "describe-*"
+//   - search subcommands: search-all-resources, search-all-iam-policies
+//     (any "search-*")
+//   - test-iam-permissions (permission probe, read-only)
 func isVerbAllowed(v string) bool {
 	switch v {
-	case "list", "describe", "get", "get-value", "get-credentials",
-		"show", "read", "logs":
+	case "list", "describe", "get", "show", "read", "logs",
+		"tail", "wait", "search", "test-iam-permissions":
 		return true
-	default:
-		return false
 	}
+	if strings.HasPrefix(v, "get-") ||
+		strings.HasPrefix(v, "list-") ||
+		strings.HasPrefix(v, "describe-") ||
+		strings.HasPrefix(v, "search-") {
+		return true
+	}
+	return false
 }
