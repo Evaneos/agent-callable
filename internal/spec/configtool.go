@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
+)
+
+// Valid values for ConfigToolOpts.WriteTarget.
+const (
+	WriteTargetLast       = "last"
+	WriteTargetAll        = "all"
+	WriteTargetAfterFirst = "after_first"
 )
 
 // ConfigToolOpts contains the parameters needed to build a ConfigToolSpec.
@@ -16,8 +22,9 @@ type ConfigToolOpts struct {
 	Subcommands    map[string][]string
 	Env            map[string]string
 	AllowAll       bool
-	WriteTarget    string   // "last", "all", or "" (no write-target check)
+	WriteTarget    string   // "last", "all", "after_first", or "" (no write-target check)
 	WriteFlags     []string // flags that trigger write_target checking (e.g. "--fix", "-i")
+	DeniedFlags    []string // flags that block execution outright (e.g. "-exec", "-delete", "-O")
 	WritableDirs   []string // from GlobalConfig
 }
 
@@ -31,6 +38,7 @@ type ConfigToolSpec struct {
 	subcommands    map[string][]string
 	writeTarget    string
 	writeFlags     []string // preserved as slice for prefix matching on short flags
+	deniedFlags    []string
 	writableDirs   []string
 }
 
@@ -53,6 +61,7 @@ func NewConfigTool(opts ConfigToolOpts) *ConfigToolSpec {
 		subcommands:    opts.Subcommands,
 		writeTarget:    opts.WriteTarget,
 		writeFlags:     opts.WriteFlags,
+		deniedFlags:    opts.DeniedFlags,
 		writableDirs:   opts.WritableDirs,
 	}
 }
@@ -74,32 +83,36 @@ func (t *ConfigToolSpec) NonInteractiveEnv() map[string]string {
 func (t *ConfigToolSpec) Check(args []string, _ RuntimeCtx) Result {
 	// Control characters are checked by the engine before calling Check.
 
+	if denied := t.matchDeniedFlag(args); denied != "" {
+		return Deny(fmt.Sprintf("%s: flag %q is denied", t.name, denied))
+	}
+
 	if t.allowAll {
 		return t.checkWriteTarget(args)
 	}
 
 	if len(args) == 0 {
-		return Deny(fmt.Sprintf("%s requires a subcommand", t.name))
+		return Deny(fmt.Sprintf("%s: subcommand required", t.name))
 	}
 
 	cmd := NthNonFlag(args, 1, t.flagsWithValue)
 	if cmd == "" {
-		return Deny(fmt.Sprintf("%s subcommand not found", t.name))
+		return Deny(fmt.Sprintf("%s: subcommand not found", t.name))
 	}
 
 	if !t.allowedSet[cmd] {
-		return Deny(fmt.Sprintf("command %s %q not allowed", t.name, cmd))
+		return Deny(fmt.Sprintf("%s: subcommand %q not allowed", t.name, cmd))
 	}
 
 	if subs, ok := t.subcommands[cmd]; ok {
 		sub := NthNonFlag(args, 2, t.flagsWithValue)
 		if sub == "" {
-			return Deny(fmt.Sprintf("%s %s requires a subcommand", t.name, cmd))
+			return Deny(fmt.Sprintf("%s: %s requires a subcommand", t.name, cmd))
 		}
 		if slices.Contains(subs, sub) {
 			return t.checkWriteTarget(args)
 		}
-		return Deny(fmt.Sprintf("command %s %s %q not allowed", t.name, cmd, sub))
+		return Deny(fmt.Sprintf("%s: %s subcommand %q not allowed", t.name, cmd, sub))
 	}
 
 	return t.checkWriteTarget(args)
@@ -117,47 +130,42 @@ func (t *ConfigToolSpec) checkWriteTarget(args []string) Result {
 
 	positional := AllPositionalArgs(args, t.flagsWithValue)
 
+	var targets []string
 	switch t.writeTarget {
-	case "last":
+	case WriteTargetLast:
 		if len(positional) == 0 {
 			return Allow()
 		}
-		target := positional[len(positional)-1]
+		targets = positional[len(positional)-1:]
+	case WriteTargetAll:
+		targets = positional
+	case WriteTargetAfterFirst:
+		if len(positional) <= 1 {
+			return Allow()
+		}
+		targets = positional[1:]
+	}
+
+	for _, target := range targets {
 		if !IsUnderWritableDir(target, t.writableDirs) {
 			return Deny(fmt.Sprintf("%s: write target %q outside writable directories", t.name, target))
 		}
-	case "all":
-		for _, target := range positional {
-			if !IsUnderWritableDir(target, t.writableDirs) {
-				return Deny(fmt.Sprintf("%s: write target %q outside writable directories", t.name, target))
-			}
-		}
 	}
-
 	return Allow()
 }
 
-// hasWriteFlag checks whether any write flag is present in args.
-// Long flags (--foo) match exactly or with = (--foo=bar).
-// Short flags (-x) match by prefix (-x, -x.bak, -xSUFFIX).
-func (t *ConfigToolSpec) hasWriteFlag(args []string) bool {
-	for _, a := range args {
-		if a == "--" {
-			break
-		}
-		for _, wf := range t.writeFlags {
-			if strings.HasPrefix(wf, "--") {
-				// Long flag: exact or --flag=value
-				if a == wf || strings.HasPrefix(a, wf+"=") {
-					return true
-				}
-			} else {
-				// Short flag: prefix match (-i matches -i, -i.bak, -i'')
-				if a == wf || (strings.HasPrefix(a, wf) && len(a) > len(wf)) {
-					return true
-				}
-			}
-		}
+// matchDeniedFlag returns the first denied flag found in args, or "" if none.
+// Matching is exact only — no short-flag prefix matching — to avoid false
+// positives like `-d` matching `-delete`. Tokens after `--` are ignored.
+func (t *ConfigToolSpec) matchDeniedFlag(args []string) string {
+	if len(t.deniedFlags) == 0 {
+		return ""
 	}
-	return false
+	return FirstMatchingFlag(args, t.deniedFlags, MatchFlag)
+}
+
+// hasWriteFlag checks whether any write flag is present in args.
+// Short flags (-x) additionally match by prefix (-x.bak, -xSUFFIX).
+func (t *ConfigToolSpec) hasWriteFlag(args []string) bool {
+	return FirstMatchingFlag(args, t.writeFlags, MatchFlagOrShortPrefix) != ""
 }

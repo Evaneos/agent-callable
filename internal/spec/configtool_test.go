@@ -339,6 +339,136 @@ func TestWriteTargetEmptyWritableDirs(t *testing.T) {
 	}
 }
 
+func TestWriteTargetAfterFirstReadOnly(t *testing.T) {
+	tool := writeTargetTool("xxd", "after_first", []string{"/tmp"}, []string{"-c"})
+
+	// 0 or 1 positional arg => read-only, the first arg is never checked.
+	allowed := [][]string{
+		nil,
+		{"/etc/passwd"},
+		{"-c", "16", "/etc/passwd"},
+		{"/usr/share/anywhere.bin"},
+	}
+	for _, a := range allowed {
+		res := tool.Check(a, RuntimeCtx{})
+		if res.Decision != DecisionAllow {
+			t.Errorf("expected allow for %v, got deny: %s", a, res.Reason)
+		}
+	}
+}
+
+func TestWriteTargetAfterFirstWriteAllowed(t *testing.T) {
+	tool := writeTargetTool("xxd", "after_first", []string{"/tmp"}, []string{"-c"})
+
+	allowed := [][]string{
+		{"/etc/passwd", "/tmp/out.bin"},
+		{"-r", "/etc/dump.hex", "/tmp/restored.bin"},
+		{"src", "/dev/null"},
+	}
+	for _, a := range allowed {
+		res := tool.Check(a, RuntimeCtx{})
+		if res.Decision != DecisionAllow {
+			t.Errorf("expected allow for %v, got deny: %s", a, res.Reason)
+		}
+	}
+}
+
+func TestWriteTargetAfterFirstWriteBlocked(t *testing.T) {
+	tool := writeTargetTool("xxd", "after_first", []string{"/tmp"}, []string{"-c"})
+
+	blocked := [][]string{
+		{"/etc/in", "/etc/passwd"},
+		{"/tmp/ok", "/usr/local/bad"},
+	}
+	for _, a := range blocked {
+		res := tool.Check(a, RuntimeCtx{})
+		if res.Decision == DecisionAllow {
+			t.Errorf("expected blocked for %v", a)
+		}
+	}
+}
+
+// --- denied_flags tests ---
+
+func deniedFlagsTool(name string, denied []string) *ConfigToolSpec {
+	return NewConfigTool(ConfigToolOpts{
+		Name:        name,
+		AllowAll:    true,
+		DeniedFlags: denied,
+	})
+}
+
+func TestDeniedFlagsExactMatch(t *testing.T) {
+	tool := deniedFlagsTool("find", []string{"-exec", "-delete"})
+
+	blocked := [][]string{
+		{".", "-exec", "rm", "{}", ";"},
+		{".", "-delete"},
+		{"-delete"},
+	}
+	for _, a := range blocked {
+		res := tool.Check(a, RuntimeCtx{})
+		if res.Decision == DecisionAllow {
+			t.Errorf("expected deny for %v", a)
+		}
+	}
+}
+
+func TestDeniedFlagsNoPrefixMatch(t *testing.T) {
+	// -exec must NOT match -execdir or -execfoo (exact match only).
+	tool := deniedFlagsTool("find", []string{"-exec"})
+
+	res := tool.Check([]string{".", "-execdir", "echo"}, RuntimeCtx{})
+	if res.Decision != DecisionAllow {
+		t.Errorf("expected allow for -execdir when only -exec is denied, got: %s", res.Reason)
+	}
+
+	res = tool.Check([]string{".", "-execstuff"}, RuntimeCtx{})
+	if res.Decision != DecisionAllow {
+		t.Errorf("expected allow for -execstuff, got: %s", res.Reason)
+	}
+}
+
+func TestDeniedFlagsLongFlagWithEquals(t *testing.T) {
+	tool := deniedFlagsTool("curl", []string{"--remote-name"})
+
+	blocked := [][]string{
+		{"--remote-name", "https://x"},
+		{"--remote-name=foo", "https://x"},
+	}
+	for _, a := range blocked {
+		res := tool.Check(a, RuntimeCtx{})
+		if res.Decision == DecisionAllow {
+			t.Errorf("expected deny for %v", a)
+		}
+	}
+
+	// --remote-names (different flag) must pass.
+	res := tool.Check([]string{"--remote-names", "https://x"}, RuntimeCtx{})
+	if res.Decision != DecisionAllow {
+		t.Errorf("expected allow for --remote-names, got: %s", res.Reason)
+	}
+}
+
+func TestDeniedFlagsAfterDoubleDash(t *testing.T) {
+	tool := deniedFlagsTool("find", []string{"-delete"})
+
+	// Tokens after -- are positional arguments, not flags.
+	res := tool.Check([]string{".", "--", "-delete"}, RuntimeCtx{})
+	if res.Decision != DecisionAllow {
+		t.Errorf("expected allow for token after --, got: %s", res.Reason)
+	}
+}
+
+func TestDeniedFlagsEmpty(t *testing.T) {
+	tool := deniedFlagsTool("find", nil)
+
+	res := tool.Check([]string{".", "-exec", "rm", "{}", ";"}, RuntimeCtx{})
+	if res.Decision != DecisionAllow {
+		t.Errorf("expected allow when denied_flags is empty, got: %s", res.Reason)
+	}
+}
+
 func TestWriteTargetEmptyString(t *testing.T) {
 	// No write_target set -> no checking (current behavior)
 	tool := writeTargetTool("tar", "", []string{"/tmp"}, nil)
@@ -681,4 +811,3 @@ func TestConfigToolNameAndFlagsMap(t *testing.T) {
 		t.Error("expected FlagsWithValueMap not to contain --other")
 	}
 }
-

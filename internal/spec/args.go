@@ -98,10 +98,47 @@ func AllPositionalArgs(args []string, flagsWithValue map[string]bool) []string {
 	return tokens
 }
 
+// MatchFlag returns true if arg matches flag exactly, or — for long flags
+// (--foo) — also if arg has the --foo=value form.
+func MatchFlag(arg, flag string) bool {
+	if arg == flag {
+		return true
+	}
+	if strings.HasPrefix(flag, "--") {
+		return strings.HasPrefix(arg, flag+"=")
+	}
+	return false
+}
+
+// MatchFlagOrShortPrefix is MatchFlag plus short-flag prefix matching:
+// `-i` also matches `-i.bak`, `-iSUFFIX`, etc.
+func MatchFlagOrShortPrefix(arg, flag string) bool {
+	if MatchFlag(arg, flag) {
+		return true
+	}
+	return !strings.HasPrefix(flag, "--") && strings.HasPrefix(arg, flag) && len(arg) > len(flag)
+}
+
+// FirstMatchingFlag walks args (stopping at "--") and returns the first
+// flag from flags whose match against an arg succeeds, or "" if none.
+func FirstMatchingFlag(args, flags []string, match func(arg, flag string) bool) string {
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		for _, f := range flags {
+			if match(a, f) {
+				return f
+			}
+		}
+	}
+	return ""
+}
+
 // ContainsFlag checks if args contains the given flag (exact match or --flag=... prefix).
 func ContainsFlag(args []string, flag string) bool {
 	for _, a := range args {
-		if a == flag || strings.HasPrefix(a, flag+"=") {
+		if MatchFlag(a, flag) {
 			return true
 		}
 	}

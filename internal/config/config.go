@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/evaneos/agent-callable/internal/spec"
 
 	"github.com/BurntSushi/toml"
 )
@@ -21,8 +24,8 @@ var HelpText string
 type AuditConfig struct {
 	File               string `toml:"file"`                 // path to the audit log file (empty = disabled)
 	Mode               string `toml:"mode"`                 // "blocked", "allowed", "all" (default: "all")
-	MaxEntries         int    `toml:"max_entries"`           // max log lines kept (0 = unlimited)
-	MaskSecrets        bool   `toml:"mask_secrets"`          // mask sensitive values in logged commands
+	MaxEntries         int    `toml:"max_entries"`          // max log lines kept (0 = unlimited)
+	MaskSecrets        bool   `toml:"mask_secrets"`         // mask sensitive values in logged commands
 	IncludeAuditChecks bool   `toml:"include_audit_checks"` // log --audit and --claude dry-run checks
 }
 
@@ -45,6 +48,7 @@ type ToolConfig struct {
 	FlagsWithValue []string            `toml:"flags_with_value"`
 	WriteTarget    string              `toml:"write_target"`
 	WriteFlags     []string            `toml:"write_flags"`
+	DeniedFlags    []string            `toml:"denied_flags"`
 }
 
 // ConfigTool is the internal representation after loading.
@@ -54,6 +58,44 @@ type ConfigTool struct {
 }
 
 var nameRe = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+func validateFlagPrefix(field string, flags []string) error {
+	for _, f := range flags {
+		if !strings.HasPrefix(f, "-") {
+			return fmt.Errorf("%s entry %q must start with -", field, f)
+		}
+	}
+	return nil
+}
+
+var validWriteTargets = []string{spec.WriteTargetLast, spec.WriteTargetAll, spec.WriteTargetAfterFirst}
+
+func validateWriteTarget(name, target string) error {
+	if target == "" || slices.Contains(validWriteTargets, target) {
+		return nil
+	}
+	return fmt.Errorf("[%s]: write_target must be one of %q (got %q)", name, validWriteTargets, target)
+}
+
+func (c *ToolConfig) validateFlags() error {
+	flagFields := []struct {
+		name  string
+		flags []string
+	}{
+		{"flags_with_value", c.FlagsWithValue},
+		{"write_flags", c.WriteFlags},
+		{"denied_flags", c.DeniedFlags},
+	}
+	for _, f := range flagFields {
+		if err := validateFlagPrefix(f.name, f.flags); err != nil {
+			return err
+		}
+	}
+	if len(c.WriteFlags) > 0 && c.WriteTarget == "" {
+		return fmt.Errorf("[%s]: write_flags requires write_target", c.Name)
+	}
+	return validateWriteTarget(c.Name, c.WriteTarget)
+}
 
 // Validate checks a ToolConfig for structural correctness.
 func (c *ToolConfig) Validate() error {
@@ -68,42 +110,13 @@ func (c *ToolConfig) Validate() error {
 	}
 	if c.Mode == "extend" {
 		// Extend mode: relaxed validation — only check flags format.
-		for _, f := range c.FlagsWithValue {
-			if !strings.HasPrefix(f, "-") {
-				return fmt.Errorf("flags_with_value entry %q must start with -", f)
-			}
-		}
-		for _, f := range c.WriteFlags {
-			if !strings.HasPrefix(f, "-") {
-				return fmt.Errorf("write_flags entry %q must start with -", f)
-			}
-		}
-		if len(c.WriteFlags) > 0 && c.WriteTarget == "" {
-			return fmt.Errorf("[%s]: write_flags requires write_target", c.Name)
-		}
-		if c.WriteTarget != "" && c.WriteTarget != "last" && c.WriteTarget != "all" {
-			return fmt.Errorf("[%s]: write_target must be \"last\" or \"all\" (got %q)", c.Name, c.WriteTarget)
-		}
-		return nil
+		return c.validateFlags()
 	}
 	if len(c.Allowed) == 0 {
 		return fmt.Errorf("[%s]: allowed is required", c.Name)
 	}
-	if c.WriteTarget != "" && c.WriteTarget != "last" && c.WriteTarget != "all" {
-		return fmt.Errorf("[%s]: write_target must be \"last\" or \"all\" (got %q)", c.Name, c.WriteTarget)
-	}
-	for _, f := range c.FlagsWithValue {
-		if !strings.HasPrefix(f, "-") {
-			return fmt.Errorf("flags_with_value entry %q must start with -", f)
-		}
-	}
-	for _, f := range c.WriteFlags {
-		if !strings.HasPrefix(f, "-") {
-			return fmt.Errorf("write_flags entry %q must start with -", f)
-		}
-	}
-	if len(c.WriteFlags) > 0 && c.WriteTarget == "" {
-		return fmt.Errorf("[%s]: write_flags requires write_target", c.Name)
+	if err := c.validateFlags(); err != nil {
+		return err
 	}
 	if slices.Contains(c.Allowed, "*") {
 		if len(c.Allowed) > 1 {
@@ -111,12 +124,8 @@ func (c *ToolConfig) Validate() error {
 		}
 		return nil
 	}
-	allowedSet := make(map[string]bool, len(c.Allowed))
-	for _, a := range c.Allowed {
-		allowedSet[a] = true
-	}
 	for k := range c.Subcommands {
-		if !allowedSet[k] {
+		if !slices.Contains(c.Allowed, k) {
 			return fmt.Errorf("subcommand key %q is not in allowed list", k)
 		}
 	}
@@ -126,11 +135,8 @@ func (c *ToolConfig) Validate() error {
 // xdgBaseDir returns the XDG-based config directory for agent-callable.
 // Uses XDG_CONFIG_HOME if set, otherwise ~/.config.
 func xdgBaseDir() string {
-	xdg := os.Getenv("XDG_CONFIG_HOME")
-	if xdg == "" {
-		home, _ := os.UserHomeDir()
-		xdg = filepath.Join(home, ".config")
-	}
+	home, _ := os.UserHomeDir()
+	xdg := cmp.Or(os.Getenv("XDG_CONFIG_HOME"), filepath.Join(home, ".config"))
 	return filepath.Join(xdg, "agent-callable")
 }
 

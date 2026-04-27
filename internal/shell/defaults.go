@@ -1,7 +1,9 @@
 package shell
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -65,6 +67,10 @@ allowed = ["*"]
 allowed = ["*"]
 [find]
 allowed = ["*"]
+# -exec/-execdir/-ok/-okdir: arbitrary command execution
+# -delete: filesystem destruction
+# -fprint*/-fls: writes to a file path the engine can't validate
+denied_flags = ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprintf", "-fls"]
 [ls]
 allowed = ["*"]
 [readlink]
@@ -105,6 +111,9 @@ write_target = "last"
 
 	"network.toml": `[curl]
 allowed = ["*"]
+# -O/--remote-name*: writes a file in CWD with a name derived from the URL
+# -J/--remote-header-name: filename from the Content-Disposition response header
+denied_flags = ["-O", "--remote-name", "--remote-name-all", "-J", "--remote-header-name"]
 [dig]
 allowed = ["*"]
 [host]
@@ -193,7 +202,13 @@ allowed = ["*"]
 allowed = ["*"]
 [sha1sum]
 allowed = ["*"]
+[sha224sum]
+allowed = ["*"]
 [sha256sum]
+allowed = ["*"]
+[sha384sum]
+allowed = ["*"]
+[sha512sum]
 allowed = ["*"]
 [seq]
 allowed = ["*"]
@@ -262,6 +277,18 @@ allowed = ["*"]
 
 [yamllint]
 allowed = ["*"]
+`,
+
+	"binary-inspection.toml": `[hexdump]
+allowed = ["*"]
+[od]
+allowed = ["*"]
+[strings]
+allowed = ["*"]
+[xxd]
+allowed = ["*"]
+write_target = "after_first"
+flags_with_value = ["-c", "-g", "-l", "-n", "-o", "-s", "-R"]
 `,
 
 	"typescript.toml": `[tsc]
@@ -424,11 +451,8 @@ web = ["get"]
 
 // auditConfigBlock returns the [audit] TOML block with a XDG-based default path.
 func auditConfigBlock() string {
-	dataHome := os.Getenv("XDG_DATA_HOME")
-	if dataHome == "" {
-		home, _ := os.UserHomeDir()
-		dataHome = filepath.Join(home, ".local", "share")
-	}
+	home, _ := os.UserHomeDir()
+	dataHome := cmp.Or(os.Getenv("XDG_DATA_HOME"), filepath.Join(home, ".local", "share"))
 	auditFile := filepath.Join(dataHome, "agent-callable", "audit.log")
 	return fmt.Sprintf(`
 [audit]
@@ -486,6 +510,11 @@ var Categories = []ConfigCategory{
 		Desc:     "bash -c / sh -c (shell expressions), echo, env, base64, printf, md5sum, sleep, timeout, nice, xargs, which, type...",
 		Files:    []string{"utilities.toml"},
 		Builtins: []string{"bash", "sh", "timeout", "nice", "xargs"},
+	},
+	{
+		Label: "Binary inspection",
+		Desc:  "hexdump, od, strings, xxd (xxd output goes to writable_dirs)",
+		Files: []string{"binary-inspection.toml"},
 	},
 	{
 		Label: "Network",
@@ -588,12 +617,7 @@ func AllBuiltins() []string {
 			seen[b] = true
 		}
 	}
-	names := make([]string, 0, len(seen))
-	for name := range seen {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	return names
+	return slices.Sorted(maps.Keys(seen))
 }
 
 // buildGlobalConfig generates the config.toml content with explicit [builtins] section.

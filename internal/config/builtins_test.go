@@ -837,6 +837,88 @@ func TestDefaultChmodWriteTarget(t *testing.T) {
 	spectest.AssertBlocked(t, tool, []string{"777", "/etc/passwd"})
 }
 
+// --- find (denied_flags in filesystem.toml) ---
+
+func TestDefaultFindReadOnlyAllowed(t *testing.T) {
+	tool := loadDefaultTool(t, "find")
+	cases := [][]string{
+		{".", "-name", "*.go"},
+		{"/tmp", "-type", "f"},
+		{"-L", ".", "-maxdepth", "2"},
+	}
+	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+func TestDefaultFindDeniedFlagsBlocked(t *testing.T) {
+	tool := loadDefaultTool(t, "find")
+	cases := [][]string{
+		{".", "-exec", "rm", "{}", ";"},
+		{".", "-execdir", "rm", "{}", ";"},
+		{".", "-ok", "rm", "{}", ";"},
+		{".", "-okdir", "rm", "{}", ";"},
+		{".", "-delete"},
+		{".", "-fprint", "/tmp/out"},
+		{".", "-fprintf", "/tmp/out", "%p\\n"},
+		{".", "-fls", "/tmp/out"},
+	}
+	spectest.AssertBlockedBatch(t, tool, cases)
+}
+
+// --- curl (denied_flags in network.toml) ---
+
+func TestDefaultCurlAllowed(t *testing.T) {
+	tool := loadDefaultTool(t, "curl")
+	cases := [][]string{
+		{"https://example.com"},
+		{"-sSL", "https://example.com"},
+		{"-o", "/tmp/file", "https://example.com"},
+		{"--output", "/tmp/file", "https://example.com"},
+	}
+	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+func TestDefaultCurlDeniedFlagsBlocked(t *testing.T) {
+	tool := loadDefaultTool(t, "curl")
+	cases := [][]string{
+		{"-O", "https://example.com"},
+		{"--remote-name", "https://example.com"},
+		{"--remote-name-all", "https://example.com"},
+		{"-J", "-O", "https://example.com"},
+		{"--remote-header-name", "-O", "https://example.com"},
+	}
+	spectest.AssertBlockedBatch(t, tool, cases)
+}
+
+// --- xxd (write_target = after_first in utilities.toml) ---
+
+func TestDefaultXxdReadOnly(t *testing.T) {
+	tool := loadDefaultToolWithDirs(t, "xxd", []string{"/tmp"})
+	cases := [][]string{
+		nil,
+		{"/etc/passwd"},
+		{"-c", "16", "/usr/share/something.bin"},
+	}
+	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+func TestDefaultXxdWriteAllowed(t *testing.T) {
+	tool := loadDefaultToolWithDirs(t, "xxd", []string{"/tmp"})
+	cases := [][]string{
+		{"/etc/in.bin", "/tmp/out.bin"},
+		{"-r", "/etc/dump.hex", "/tmp/restored.bin"},
+	}
+	spectest.AssertAllowedBatch(t, tool, cases)
+}
+
+func TestDefaultXxdWriteBlocked(t *testing.T) {
+	tool := loadDefaultToolWithDirs(t, "xxd", []string{"/tmp"})
+	cases := [][]string{
+		{"/etc/in", "/etc/passwd"},
+		{"/tmp/ok", "/usr/local/bad"},
+	}
+	spectest.AssertBlockedBatch(t, tool, cases)
+}
+
 // --- tsc (allow_all in typescript.toml) ---
 
 func TestDefaultTscAllowsAnyArgs(t *testing.T) {
@@ -946,4 +1028,3 @@ func TestDefaultGolangciLintBlocksUnsafeSubcommands(t *testing.T) {
 	}
 	spectest.AssertBlockedBatch(t, tool, blocked)
 }
-
