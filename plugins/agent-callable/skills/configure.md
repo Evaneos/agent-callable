@@ -77,8 +77,9 @@ GIT_TERMINAL_PROMPT = "0"
 - `mode` — `"replace"` (default) or `"extend"`. See Extend mode below.
 - `allowed` (required for replace) — `["*"]` for unrestricted, or `["sub1", "sub2"]` for allowlist
 - `flags_with_value` — flags that consume the next arg (prevents confusing a flag value with a subcommand)
-- `write_target` — `"last"` (cp, mv, sed -i) or `"all"` (mkdir, touch, tee): destination args checked against `writable_dirs`
+- `write_target` — destination args checked against `writable_dirs`. `"last"` (cp, mv, sed -i), `"all"` (mkdir, touch, tee), or `"after_first"` (xxd in [out]: first positional is read-only input, rest are destinations)
 - `write_flags` — only enforce `write_target` when one of these flags is present (e.g. `-i` for sed)
+- `denied_flags` — block execution outright when any listed flag appears in args, regardless of `allowed = ["*"]`. Exact match (no short-flag prefix). Used to carve out dangerous knobs like `find -exec`/`-delete` or `curl -O`
 - `[tool.env]` — env vars applied when the command is allowed
 - `[tool.subcommands]` — second-level subcommand allowlists (keys must be a subset of `allowed`)
 

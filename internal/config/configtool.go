@@ -14,6 +14,7 @@ func (ct ConfigTool) ToToolSpec(writableDirs []string) *spec.ConfigToolSpec {
 		AllowAll:       ct.AllowAll,
 		WriteTarget:    ct.ToolConfig.WriteTarget,
 		WriteFlags:     ct.ToolConfig.WriteFlags,
+		DeniedFlags:    ct.ToolConfig.DeniedFlags,
 		WritableDirs:   writableDirs,
 	})
 }

@@ -58,14 +58,24 @@ Fields (inside [toolname])
   allowed          (string[], required for replace)  Subcommands to allow, or ["*"] for all
   flags_with_value (string[])  Flags that consume the next argument
   write_target     (string)    Check write destination against writable_dirs:
-                               "last" = last positional arg (cp, mv, ln)
-                               "all"  = all positional args (mkdir, touch, tee)
+                               "last"        = last positional arg (cp, mv, ln)
+                               "all"         = all positional args (mkdir, touch, tee)
+                               "after_first" = all positionals except the first
+                                               (xxd in [out]: first is read-only input,
+                                                rest must be in writable_dirs)
   write_flags      (string[])  Only enforce write_target when one of these flags
                                is present. Without write_flags, write_target is
                                always enforced. Requires write_target to be set.
                                Short flags match by prefix: "-i" matches -i, -i.bak
                                Long flags match exactly or with =: "--fix" matches
                                --fix and --fix=true.
+  denied_flags     (string[])  Block execution outright when any listed flag appears
+                               in args, regardless of allowed = ["*"]. Matching is
+                               exact for both short and long flags ("-exec" does not
+                               match "-execdir"). Long flags also match "--flag=value".
+                               Tokens after "--" are ignored. Useful for carving out
+                               dangerous knobs of an otherwise-safe tool (find -exec/
+                               -delete, curl -O which writes to CWD).
   [toolname.env]       (table)     Environment overrides applied when allowed
   [toolname.subcommands] (table)   Second-level subcommand allowlists
 
@@ -138,7 +148,9 @@ Validation rules
   - Keys of [toolname.subcommands] must be a subset of allowed
   - Each entry in flags_with_value must start with -
   - Each entry in write_flags must start with -
+  - Each entry in denied_flags must start with -
   - write_flags requires write_target to be set
+  - write_target must be one of "last", "all", "after_first"
   - Invalid configs produce a stderr warning; the tool is not registered
 
 Quick start

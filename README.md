@@ -170,8 +170,11 @@ flags_with_value = ["-e", "-f", "--expression", "--file"]
 `write_target` controls which arguments are checked against `writable_dirs`:
 - `"last"` — last positional arg is the destination (`cp`, `mv`, `ln`, `sed -i`)
 - `"all"` — all positional args are destinations (`mkdir`, `touch`, `tee`, `eslint --fix`)
+- `"after_first"` — first positional is read-only input, subsequent ones are destinations (`xxd in [out]`)
 
 `write_flags` makes `write_target` conditional: the check is only enforced when one of the listed flags is present. Without the flag, the command runs freely (read-only mode). Short flags match by prefix (`-i` matches `-i.bak`), long flags match exactly or with `=` (`--fix` matches `--fix=true`).
+
+`denied_flags` blocks execution outright when any listed flag appears in the command, regardless of `allowed = ["*"]`. Useful for carving out dangerous knobs of an otherwise-safe tool (e.g. `find -exec`/`-delete`, `curl -O` which writes to CWD with a filename derived from the URL). Matching is exact for both short and long flags — `-exec` does not match `-execdir`. Long flags also match `--flag=value`. Tokens after `--` are ignored.
 
 Built-in tools always take priority over config files. User configs can also use `mode = "extend"` to add subcommands to built-in tools without replacing their custom logic (see `agent-callable --help-config`).
 

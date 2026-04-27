@@ -186,6 +186,81 @@ func TestAllPositionalArgs(t *testing.T) {
 	}
 }
 
+func TestMatchFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		arg  string
+		flag string
+		want bool
+	}{
+		{"long exact", "--fix", "--fix", true},
+		{"long with value", "--fix=true", "--fix", true},
+		{"long unrelated", "--verbose", "--fix", false},
+		{"long prefix not equals", "--fixup", "--fix", false},
+		{"short exact", "-i", "-i", true},
+		{"short with suffix denied", "-i.bak", "-i", false},
+		{"short with equals denied", "-i=foo", "-i", false},
+		{"posix-style exact", "-exec", "-exec", true},
+		{"posix-style prefix denied", "-execdir", "-exec", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MatchFlag(tt.arg, tt.flag); got != tt.want {
+				t.Errorf("MatchFlag(%q, %q) = %v, want %v", tt.arg, tt.flag, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchFlagOrShortPrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		arg  string
+		flag string
+		want bool
+	}{
+		{"long exact", "--fix", "--fix", true},
+		{"long with value", "--fix=true", "--fix", true},
+		{"long prefix denied", "--fixup", "--fix", false},
+		{"short exact", "-i", "-i", true},
+		{"short with suffix allowed", "-i.bak", "-i", true},
+		{"short unrelated", "-v", "-i", false},
+		{"posix-style exact", "-exec", "-exec", true},
+		{"posix-style prefix allowed", "-execdir", "-exec", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MatchFlagOrShortPrefix(tt.arg, tt.flag); got != tt.want {
+				t.Errorf("MatchFlagOrShortPrefix(%q, %q) = %v, want %v", tt.arg, tt.flag, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFirstMatchingFlag(t *testing.T) {
+	tests := []struct {
+		name  string
+		args  []string
+		flags []string
+		want  string
+	}{
+		{"empty args", nil, []string{"-x"}, ""},
+		{"empty flags", []string{"-x"}, nil, ""},
+		{"first match wins", []string{"-y", "-x"}, []string{"-x", "-y"}, "-y"},
+		{"order independent", []string{"-x"}, []string{"-y", "-x"}, "-x"},
+		{"stops at double dash", []string{"--", "-x"}, []string{"-x"}, ""},
+		{"long with value", []string{"--fix=true"}, []string{"--fix"}, "--fix"},
+		{"none match", []string{"-a", "-b"}, []string{"-x"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FirstMatchingFlag(tt.args, tt.flags, MatchFlag); got != tt.want {
+				t.Errorf("FirstMatchingFlag(%v, %v) = %q, want %q", tt.args, tt.flags, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestContainsFlag(t *testing.T) {
 	tests := []struct {
 		name string
