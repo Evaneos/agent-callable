@@ -8,13 +8,12 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 
 # Plugin Claude Code
 PLUGIN_SRC   ?= plugins/agent-callable
+PLUGIN_KEY   ?= agent-callable@agent-callable
 PLUGIN_NAME  ?= $(shell jq -r .name $(PLUGIN_SRC)/.claude-plugin/plugin.json 2>/dev/null)
 PLUGIN_VER   ?= $(shell jq -r .version $(PLUGIN_SRC)/.claude-plugin/plugin.json 2>/dev/null)
-PLUGIN_CACHE ?= $(HOME)/.claude/plugins/cache/agent-callable/$(PLUGIN_NAME)/$(PLUGIN_VER)
 PLUGIN_DIR   ?= $(CURDIR)/$(PLUGIN_SRC)
-MAIN_DIR     ?= $(shell git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')/$(PLUGIN_SRC)
 
-.PHONY: build install test fmt tidy clean build-all clean-all package info dev heal tag
+.PHONY: build install test fmt tidy clean build-all clean-all package info dev repair tag
 
 LDFLAGS ?= -ldflags="-s -w -X main.version=$(VERSION)"
 
@@ -59,20 +58,13 @@ package: build-all
 	@cd $(DISTDIR) && sha256sum *.tar.gz > checksums.txt
 	@echo "Checksums: $(DISTDIR)/checksums.txt"
 
-# Plugin dev: symlink cache to current directory (main or worktree)
+# Plugin dev: point cache to current directory (main or worktree)
 dev:
-	@mkdir -p $(dir $(PLUGIN_CACHE))
-	@rm -rf $(PLUGIN_CACHE)
-	@ln -s $(PLUGIN_DIR) $(PLUGIN_CACHE)
-	@echo "Cache symlinked → $(PLUGIN_DIR)"
+	@cplugins dev $(PLUGIN_KEY) $(PLUGIN_DIR)
 
-# Plugin heal: fix dangling symlink (cleaned worktree) by pointing back to main
-heal:
-	@if [ -L $(PLUGIN_CACHE) ] && [ ! -d $(PLUGIN_CACHE) ]; then \
-		rm -f $(PLUGIN_CACHE); \
-		ln -s $(MAIN_DIR) $(PLUGIN_CACHE); \
-		echo "Cache healed → $(MAIN_DIR)"; \
-	fi
+# Plugin repair: fix broken cache (typically after a worktree was cleaned up)
+repair:
+	@cplugins repair $(PLUGIN_KEY)
 
 # Create annotated tag from plugin.json version
 tag:
@@ -95,6 +87,4 @@ info:
 	@echo "Version:   $(VERSION)"
 	@echo "Platforms: $(PLATFORMS)"
 	@echo "Plugin:    $(PLUGIN_NAME) v$(PLUGIN_VER)"
-	@if [ -L "$(PLUGIN_CACHE)" ]; then echo "Cache:     $(PLUGIN_CACHE) → $$(readlink $(PLUGIN_CACHE)) (symlink)"; \
-	elif [ -d "$(PLUGIN_CACHE)" ]; then echo "Cache:     $(PLUGIN_CACHE) (copy)"; \
-	else echo "Cache:     not installed"; fi
+	@cplugins status $(PLUGIN_KEY)

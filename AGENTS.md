@@ -64,6 +64,6 @@ GoReleaser runs in CI (GitHub Actions) on tag push — do not run locally.
 - **Tests**: `make test`
 - **Format / modules**: `make fmt`, `make tidy`
 - **Distribution**: `make build-all`, `make package`, `make clean-all`
-- **Claude Code plugin (dev)**: `make dev` symlinks the plugin cache to the current directory (main or worktree) for live editing
-- **Claude Code plugin (heal)**: `make heal` fixes a dangling symlink (after a worktree is cleaned up) by re-pointing to main
-- **Info**: `make info` (version, plugin install status, symlink target)
+- **Claude Code plugin (dev)**: `make dev` points the plugin cache to the current directory (main or worktree) via `cplugins dev`
+- **Claude Code plugin (repair)**: `make repair` fixes a broken cache (after a worktree is cleaned up) via `cplugins repair`
+- **Info**: `make info` (version, plugin install status via `cplugins status`)
