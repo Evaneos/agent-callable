@@ -22,7 +22,10 @@ type Logger struct {
 
 // New creates a Logger. Returns nil if file is empty or mode is "none"/empty.
 // When maxEntries > 0, the log is trimmed to that many lines on open.
-func New(file, mode string, maxEntries int, doMaskSecrets bool) (*Logger, error) {
+// When daily is true, entries land in a per-day file (`audit.log` becomes
+// `audit-2006-01-02.log`, local day); maxEntries does not apply, and dated
+// files stay on disk until the operator removes them.
+func New(file, mode string, maxEntries int, doMaskSecrets, daily bool) (*Logger, error) {
 	if file == "" || mode == "" || mode == "none" {
 		return nil, nil
 	}
@@ -31,6 +34,10 @@ func New(file, mode string, maxEntries int, doMaskSecrets bool) (*Logger, error)
 	case "blocked", "allowed", "all":
 	default:
 		return nil, fmt.Errorf("audit: invalid mode %q (none, blocked, allowed, all)", mode)
+	}
+
+	if daily {
+		file = dailyPath(file, time.Now())
 	}
 
 	// Ensure parent directory exists.
@@ -49,11 +56,24 @@ func New(file, mode string, maxEntries int, doMaskSecrets bool) (*Logger, error)
 	l := &Logger{file: f, mode: mode, maxEntries: maxEntries, maskSecrets: doMaskSecrets}
 
 	// Rotate on open (each invocation writes at most 1 entry).
-	if err := l.rotate(file); err != nil {
-		fmt.Fprintf(os.Stderr, "agent-callable: audit rotation warning: %v\n", err)
+	if !daily {
+		if err := l.rotate(file); err != nil {
+			fmt.Fprintf(os.Stderr, "agent-callable: audit rotation warning: %v\n", err)
+		}
 	}
 
 	return l, nil
+}
+
+// dailyPath inserts the local day into the filename: /x/audit.log → /x/audit-2026-08-06.log.
+func dailyPath(file string, now time.Time) string {
+	dir, base := filepath.Split(file)
+	ext := filepath.Ext(base)
+	if ext == base {
+		// Dotfile (".audit"): the whole basename reads as an extension — keep it as the name.
+		ext = ""
+	}
+	return dir + strings.TrimSuffix(base, ext) + "-" + now.Format("2006-01-02") + ext
 }
 
 // rotate trims the log to maxEntries lines, keeping the most recent.

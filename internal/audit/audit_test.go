@@ -6,10 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewDisabled(t *testing.T) {
-	l, err := New("", "", 0, false)
+	l, err := New("", "", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -23,7 +24,7 @@ func TestNewDisabled(t *testing.T) {
 
 func TestNewInvalidMode(t *testing.T) {
 	dir := t.TempDir()
-	_, err := New(filepath.Join(dir, "audit.log"), "invalid", 0, false)
+	_, err := New(filepath.Join(dir, "audit.log"), "invalid", 0, false, false)
 	if err == nil {
 		t.Fatal("expected error for invalid mode")
 	}
@@ -31,7 +32,7 @@ func TestNewInvalidMode(t *testing.T) {
 
 func TestLogAll(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,7 +56,7 @@ func TestLogAll(t *testing.T) {
 
 func TestLogBlockedOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "blocked", 0, false)
+	l, err := New(path, "blocked", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,7 +77,7 @@ func TestLogBlockedOnly(t *testing.T) {
 
 func TestLogAllowedOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "allowed", 0, false)
+	l, err := New(path, "allowed", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +98,7 @@ func TestLogAllowedOnly(t *testing.T) {
 
 func TestNewModeNone(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "none", 0, false)
+	l, err := New(path, "none", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -108,7 +109,7 @@ func TestNewModeNone(t *testing.T) {
 
 func TestNewModeEmpty(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "", 0, false)
+	l, err := New(path, "", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -119,7 +120,7 @@ func TestNewModeEmpty(t *testing.T) {
 
 func TestAuditLabelsFilteredByBlockedMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "blocked", 0, false)
+	l, err := New(path, "blocked", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -140,7 +141,7 @@ func TestAuditLabelsFilteredByBlockedMode(t *testing.T) {
 
 func TestAuditLabelsFilteredByAllowedMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "allowed", 0, false)
+	l, err := New(path, "allowed", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestAuditLabelsFilteredByAllowedMode(t *testing.T) {
 
 func TestAuditLabelsInAllMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -179,7 +180,7 @@ func TestAuditLabelsInAllMode(t *testing.T) {
 
 func TestLogNoArgs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -200,7 +201,7 @@ func TestLogNoArgs(t *testing.T) {
 
 func TestFilePermissions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -222,7 +223,7 @@ func TestFilePermissionsFixExisting(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -239,7 +240,7 @@ func TestFilePermissionsFixExisting(t *testing.T) {
 
 func TestMkdirParent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "dir", "audit.log")
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -263,7 +264,7 @@ func TestRotation(t *testing.T) {
 	}
 
 	// Open with maxEntries=5 triggers rotation.
-	l, err := New(path, "all", 5, false)
+	l, err := New(path, "all", 5, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -294,7 +295,7 @@ func TestRotationNoTrimWhenUnderLimit(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	l, err := New(path, "all", 10, false)
+	l, err := New(path, "all", 10, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -318,7 +319,7 @@ func TestRotationDisabledWhenZero(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -333,7 +334,7 @@ func TestRotationDisabledWhenZero(t *testing.T) {
 
 func TestMaskSecretsIntegration(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "all", 0, true)
+	l, err := New(path, "all", 0, true, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -353,7 +354,7 @@ func TestMaskSecretsIntegration(t *testing.T) {
 
 func TestMaskSecretsDisabled(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -377,7 +378,7 @@ func TestRotationMaxEntriesOne(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	l, err := New(path, "all", 1, false)
+	l, err := New(path, "all", 1, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -403,7 +404,7 @@ func TestRotationExactlyAtLimit(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	l, err := New(path, "all", 5, false)
+	l, err := New(path, "all", 5, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -426,7 +427,7 @@ func TestRotationThenWrite(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	l, err := New(path, "all", 5, false)
+	l, err := New(path, "all", 5, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -451,7 +452,7 @@ func TestRotationEmptyFile(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	l, err := New(path, "all", 5, false)
+	l, err := New(path, "all", 5, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -468,7 +469,7 @@ func TestRotationEmptyFile(t *testing.T) {
 func TestRotationNewFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
 	// File doesn't exist yet — rotation should be a no-op.
-	l, err := New(path, "all", 5, false)
+	l, err := New(path, "all", 5, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -484,7 +485,7 @@ func TestRotationNewFile(t *testing.T) {
 
 func TestModeFilterWithMasking(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "blocked", 0, true)
+	l, err := New(path, "blocked", 0, true, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -510,7 +511,7 @@ func TestModeFilterWithMasking(t *testing.T) {
 
 func TestMaskSecretsEnvVarInLog(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	l, err := New(path, "all", 0, true)
+	l, err := New(path, "all", 0, true, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -531,7 +532,7 @@ func TestMaskSecretsEnvVarInLog(t *testing.T) {
 func TestNewErrorBadPath(t *testing.T) {
 	// Path to a directory (not a file) — OpenFile should fail.
 	dir := t.TempDir()
-	_, err := New(dir, "all", 0, false)
+	_, err := New(dir, "all", 0, false, false)
 	if err == nil {
 		t.Fatal("expected error when path is a directory")
 	}
@@ -539,7 +540,7 @@ func TestNewErrorBadPath(t *testing.T) {
 
 func TestNewErrorMkdirFail(t *testing.T) {
 	// Use /dev/null as parent — cannot create subdirectory in a device file.
-	_, err := New("/dev/null/impossible/audit.log", "all", 0, false)
+	_, err := New("/dev/null/impossible/audit.log", "all", 0, false, false)
 	if err == nil {
 		t.Fatal("expected error when parent dir cannot be created")
 	}
@@ -547,7 +548,7 @@ func TestNewErrorMkdirFail(t *testing.T) {
 
 func TestParentDirPermissions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "audit.log")
-	l, err := New(path, "all", 0, false)
+	l, err := New(path, "all", 0, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -559,5 +560,70 @@ func TestParentDirPermissions(t *testing.T) {
 	}
 	if perm := info.Mode().Perm(); perm != 0700 {
 		t.Errorf("expected parent dir permissions 0700, got %04o", perm)
+	}
+}
+
+func TestDailyPath(t *testing.T) {
+	day := time.Date(2026, 8, 6, 12, 0, 0, 0, time.Local)
+	cases := []struct{ file, want string }{
+		{"/x/audit.log", "/x/audit-2026-08-06.log"},
+		{"/x/audit", "/x/audit-2026-08-06"},
+		{"/x/log.d/audit", "/x/log.d/audit-2026-08-06"},
+		{"/x/.audit", "/x/.audit-2026-08-06"},
+		{"/x/audit.log.1", "/x/audit.log-2026-08-06.1"},
+	}
+	for _, c := range cases {
+		if got := dailyPath(c.file, day); got != c.want {
+			t.Errorf("dailyPath(%q) = %q, want %q", c.file, got, c.want)
+		}
+	}
+}
+
+func TestDailyFilesWriteToDatedFile(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "audit.log")
+	l, err := New(base, "all", 0, false, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer l.Close()
+
+	l.Log("ALLOWED", "kubectl", []string{"get", "pods"})
+
+	if _, err := os.Stat(base); !os.IsNotExist(err) {
+		t.Errorf("expected no undated file at %s", base)
+	}
+	dated := dailyPath(base, time.Now())
+	data, err := os.ReadFile(dated)
+	if err != nil {
+		t.Fatalf("expected dated file %s: %v", dated, err)
+	}
+	if !strings.Contains(string(data), "ALLOWED") {
+		t.Errorf("unexpected content: %q", string(data))
+	}
+}
+
+func TestDailyFilesSkipLineTrim(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "audit.log")
+	dated := dailyPath(base, time.Now())
+
+	// Pre-fill the dated file beyond maxEntries: daily mode must not trim it.
+	pre := strings.Repeat("2026-08-06T00:00:00Z\tALLOWED\tx\n", 5)
+	if err := os.WriteFile(dated, []byte(pre), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	l, err := New(base, "all", 2, false, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer l.Close()
+	l.Log("BLOCKED", "git", []string{"push"})
+
+	data, _ := os.ReadFile(dated)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 6 {
+		t.Fatalf("expected 6 lines (no trim), got %d", len(lines))
 	}
 }

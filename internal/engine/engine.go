@@ -102,7 +102,7 @@ func New(gc *config.GlobalConfig, cfgs []config.ConfigTool) *Engine {
 		}
 	}
 
-	auditLogger, err := audit.New(gc.Audit.File, gc.Audit.Mode, gc.Audit.MaxEntries, gc.Audit.MaskSecrets)
+	auditLogger, err := audit.New(gc.Audit.File, gc.Audit.Mode, gc.Audit.MaxEntries, gc.Audit.MaskSecrets, gc.Audit.DailyFiles)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "agent-callable: audit warning: %v\n", err)
 	}

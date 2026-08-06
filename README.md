@@ -92,11 +92,11 @@ This requires telling the agent to use the prefix (via CLAUDE.md or equivalent �
 
 Three categories of side effects:
 
-| Category | Verdict | Examples |
-|---|---|---|
-| **Remote effect** — modifies an external service | blocked | `git push`, `kubectl apply`, `gh pr create` |
-| **Persistent config change** — durably alters a tool's behavior | blocked | `helm repo add`, `gcloud config set` |
-| **Local cache/artifact write** — useful for investigation | allowed | `git fetch`, `docker pull`, `gh repo clone` |
+| Category                                                        | Verdict | Examples                                    |
+| --------------------------------------------------------------- | ------- | ------------------------------------------- |
+| **Remote effect** — modifies an external service                | blocked | `git push`, `kubectl apply`, `gh pr create` |
+| **Persistent config change** — durably alters a tool's behavior | blocked | `helm repo add`, `gcloud config set`        |
+| **Local cache/artifact write** — useful for investigation       | allowed | `git fetch`, `docker pull`, `gh repo clone` |
 
 The rule is simple: **when in doubt, block.** A false positive (unnecessary prompt) is annoying. A false negative (wiped prod database) is not.
 
@@ -118,7 +118,7 @@ Out of the box, agent-callable ships with built-in filters for 12+ CLI tools. Ea
 - **pulumi** — info + `preview` (auto-injects `--non-interactive`), blocks `--show-secrets`
 - **helm** — read-only (`list/status/history/get/show/template/lint/search`)
 - **kustomize** — `build` + `cfg` read-only
-- **gcloud** — conservative allowlist (list/describe/get-*/list-*/search/show/read/logs/tail/wait)
+- **gcloud** — conservative allowlist (list/describe/`get-*`/`list-*`/search/show/read/logs/tail/wait)
 - **npm** — read-only + `install/ci` with `--ignore-scripts` + `run` restricted to safe scripts (test, lint, build, etc.)
 - **kubectx**, **kubectl-crossplane**, **krew**, **chainsaw** — read-only
 - **bash**, **sh** — shell interpreter wrappers: only `-c <expr>` form allowed; the inner expression is recursively validated against the same policy, with `cd`-aware resolution of relative write destinations
@@ -127,6 +127,7 @@ Out of the box, agent-callable ships with built-in filters for 12+ CLI tools. Ea
 </details>
 
 Beyond built-ins, default TOML configs add:
+
 - **Text processing** — `sed`, `yq` with conditional write checking (`-i` triggers `writable_dirs`)
 - **Cloud & CI/CD** — `gsutil` read-only (`ls/cat/stat`, `acl get`, `lifecycle get`, etc.), `terraform` (plan/validate/show), `fly` (Concourse, read-only)
 - **TypeScript** — `tsc`, `eslint` (`--fix` triggers `writable_dirs`), `prettier` (`--write` triggers `writable_dirs`)
@@ -168,6 +169,7 @@ flags_with_value = ["-e", "-f", "--expression", "--file"]
 ```
 
 `write_target` controls which arguments are checked against `writable_dirs`:
+
 - `"last"` — last positional arg is the destination (`cp`, `mv`, `ln`, `sed -i`)
 - `"all"` — all positional args are destinations (`mkdir`, `touch`, `tee`, `eslint --fix`)
 - `"after_first"` — first positional is read-only input, subsequent ones are destinations (`xxd in [out]`)
@@ -190,6 +192,7 @@ allow_on_any = ["--version", "--help"]   # universal short-circuit: allowed on A
 file = "~/.local/share/agent-callable/audit.log"  # parent dir auto-created
 mode = "none"           # "none", "blocked", "allowed", "all"
 max_entries = 10000     # oldest trimmed on open (0 = unlimited)
+daily_files = false     # true: one file per day (audit-YYYY-MM-DD.log); max_entries ignored, files kept until removed
 mask_secrets = true     # mask tokens, passwords, env vars in logged commands
 ```
 

@@ -24,7 +24,8 @@ var HelpText string
 type AuditConfig struct {
 	File               string `toml:"file"`                 // path to the audit log file (empty = disabled)
 	Mode               string `toml:"mode"`                 // "blocked", "allowed", "all" (default: "all")
-	MaxEntries         int    `toml:"max_entries"`          // max log lines kept (0 = unlimited)
+	MaxEntries         int    `toml:"max_entries"`          // max log lines kept (0 = unlimited); ignored with daily_files
+	DailyFiles         bool   `toml:"daily_files"`          // one file per day (audit-YYYY-MM-DD.log), kept until removed by the operator
 	MaskSecrets        bool   `toml:"mask_secrets"`         // mask sensitive values in logged commands
 	IncludeAuditChecks bool   `toml:"include_audit_checks"` // log --audit and --claude dry-run checks
 }

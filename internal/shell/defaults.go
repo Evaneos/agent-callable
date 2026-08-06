@@ -460,6 +460,7 @@ file = %q
 mode = "none"  # "none" (disabled), "blocked", "allowed", "all"
 max_entries = 10000  # 0 = unlimited
 mask_secrets = true
+# daily_files = false  # one file per day (audit-YYYY-MM-DD.log), kept until removed
 # include_audit_checks = false
 `, auditFile)
 }
