@@ -25,6 +25,7 @@ agent-callable --init-config           # interactive: generate default configs
 docker, gcloud, gh, git, kubectl, npm, pulumi (+ wrappers: nice, timeout, xargs).
 
 Builtins have richer logic (flag inspection, secret filtering, auto-injected env). They are toggled in `config.toml`:
+
 ```toml
 [builtins]
 kubectl = true
@@ -34,18 +35,21 @@ git = true
 ## TOML config format (tools.d/)
 
 All args allowed:
+
 ```toml
 [mytool]
 allowed = ["*"]
 ```
 
 Subcommand allowlist:
+
 ```toml
 [systemctl]
 allowed = ["is-active", "is-enabled", "list-units", "status"]
 ```
 
 Write-safety (only checks destination when a write flag is present):
+
 ```toml
 [sed]
 allowed = ["*"]
@@ -55,6 +59,7 @@ flags_with_value = ["-e", "-f", "--expression", "--file"]
 ```
 
 Nested subcommands:
+
 ```toml
 [nmcli]
 allowed = ["g", "general", "c", "connection"]
@@ -65,6 +70,7 @@ general = ["status", "hostname"]
 ```
 
 Environment overrides:
+
 ```toml
 [git]
 allowed = ["status", "log", "diff"]
@@ -109,6 +115,7 @@ allowed = ["apply"]
 ```
 
 **When to use extend vs replace:**
+
 - The tool is a **builtin** and you want to unlock specific subcommands → `extend`
 - The tool is a **builtin** and you want full control over its policy → `replace` (you lose the builtin logic)
 - The tool is **not a builtin** (config-only) → `replace` (default, extend would warn)
@@ -124,7 +131,8 @@ allow_on_any = ["--version", "--help"]   # universal short-circuit: these flags 
 [audit]
 file = "~/.local/share/agent-callable/audit.log"
 mode = "blocked"          # "none" | "blocked" | "allowed" | "all"
-max_entries = 10000
+max_entries = 10000       # ignored when daily_files = true
+daily_files = false       # one file per day (audit-YYYY-MM-DD.log), kept until removed
 mask_secrets = true
 
 [builtins]

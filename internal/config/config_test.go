@@ -302,6 +302,26 @@ func TestLoadGlobalConfig(t *testing.T) {
 	}
 }
 
+func TestLoadGlobalConfigAudit(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("AGENT_CALLABLE_CONFIG_DIR", tmpDir)
+	writeFile(t, tmpDir, "config.toml", `[audit]
+file = "/x/audit.log"
+mode = "all"
+daily_files = true`)
+
+	gc, err := LoadGlobalConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !gc.Audit.DailyFiles {
+		t.Error("expected daily_files to decode to true")
+	}
+	if gc.Audit.File != "/x/audit.log" || gc.Audit.Mode != "all" {
+		t.Errorf("unexpected audit config: %+v", gc.Audit)
+	}
+}
+
 func TestLoadGlobalConfigMissing(t *testing.T) {
 	t.Setenv("AGENT_CALLABLE_CONFIG_DIR", "/nonexistent/path")
 	gc, err := LoadGlobalConfig()
