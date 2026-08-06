@@ -27,9 +27,9 @@ var safeEnvVars = map[string]bool{
 	"COLORTERM": true, "FORCE_COLOR": true, "NO_COLOR": true, "CLICOLOR": true,
 	"TMPDIR": true, "HOSTNAME": true,
 	// agent-callable tool env overrides
-	"GIT_TERMINAL_PROMPT":      true,
-	"GH_PROMPT_DISABLED":       true,
-	"HELM_DIFF_OUTPUT":         true,
+	"GIT_TERMINAL_PROMPT":       true,
+	"GH_PROMPT_DISABLED":        true,
+	"HELM_DIFF_OUTPUT":          true,
 	"AGENT_CALLABLE_CONFIG_DIR": true,
 }
 
