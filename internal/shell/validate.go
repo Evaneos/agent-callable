@@ -37,7 +37,7 @@ func Validate(expr string, reg *spec.Registry, opts ValidateOpts) (*Result, erro
 	localFuncs := make(map[string]bool)
 	toolSet := make(map[string]bool)
 	var walkErr error
-	var currentDir string      // tracks the last known cd destination for relative path resolution
+	var currentDir string        // tracks the last known cd destination for relative path resolution
 	var currentDirUncertain bool // true when cd was to a dynamic/unresolvable path
 
 	// First pass: collect function declarations.
