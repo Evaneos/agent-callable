@@ -52,7 +52,7 @@ Add the marketplace and install the plugin:
 
 ```
 /plugin marketplace add Evaneos/agent-callable
-/plugin install agent-callable@Evaneos/agent-callable
+/plugin install agent-callable@agent-callable
 ```
 
 That's it — every Bash command now goes through the filter, no allowlist to maintain, no CLAUDE.md to write.
