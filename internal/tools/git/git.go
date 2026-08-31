@@ -77,9 +77,39 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 		"blame", "grep", "reflog", "shortlog", "show-ref", "for-each-ref",
 		// Plumbing / read-only investigation
 		"ls-tree", "rev-list", "merge-base", "diff-tree", "name-rev",
-		"cherry", "range-diff", "count-objects", "verify-commit", "verify-tag":
+		"cherry", "range-diff", "count-objects", "verify-commit", "verify-tag",
+		"check-ignore", "check-ref-format":
 		return spec.Allow()
 	case "fetch", "ls-remote":
+		return spec.Allow()
+	case "symbolic-ref":
+		// Allowlist of flags rather than blacklist: git's parse-options accepts
+		// bundled short flags (-qd) and unambiguous long-flag prefixes (--del),
+		// so a blacklist of exact tokens (e.g. "-d", "--delete") can't reliably
+		// catch every spelling of a destructive flag.
+		for i := 0; i < len(args); i++ {
+			a := args[i]
+			if a == "--" {
+				break
+			}
+			if !strings.HasPrefix(a, "-") {
+				continue
+			}
+			if gitGlobalFlagsWithValue[a] {
+				i++
+				continue
+			}
+			if a != "-q" && a != "--quiet" && a != "--short" {
+				return spec.Deny(fmt.Sprintf("git symbolic-ref flag %q not allowed (read form only)", a))
+			}
+		}
+		// Read form: `git symbolic-ref <name>` (2 positionals). Write form takes a
+		// second value argument and changes what the ref points to. Positionals
+		// are counted including anything after "--", since git itself still
+		// treats them as the ref/value pair.
+		if len(spec.AllPositionalArgs(args, gitGlobalFlagsWithValue)) != 2 {
+			return spec.Deny("git symbolic-ref write form not allowed (read form only: git symbolic-ref <name>)")
+		}
 		return spec.Allow()
 	case "clone":
 		if spec.ContainsAny(args, "-f", "--force") {

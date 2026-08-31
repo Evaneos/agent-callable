@@ -42,6 +42,10 @@ func TestGitAllowlistBasic(t *testing.T) {
 		{"count-objects", "-v"},
 		{"verify-commit", "HEAD"},
 		{"verify-tag", "v1.0"},
+		{"check-ignore", "-v", "node_modules"},
+		{"check-ref-format", "--branch", "main"},
+		{"symbolic-ref", "refs/remotes/origin/HEAD"},
+		{"symbolic-ref", "-q", "HEAD"},
 		// Config read-only
 		{"config", "--list"},
 		{"config", "-l"},
@@ -123,6 +127,18 @@ func TestGitBlocksDangerousFlagsAndWrites(t *testing.T) {
 		// rm with force
 		{"rm", "-f", "file.go"},
 		{"rm", "--force", "file.go"},
+		// symbolic-ref write form (changes what the ref points to)
+		{"symbolic-ref", "HEAD", "refs/heads/main"},
+		// symbolic-ref --delete removes the ref despite looking like read form (nf==2)
+		{"symbolic-ref", "--delete", "refs/remotes/origin/HEAD"},
+		{"symbolic-ref", "-d", "refs/remotes/origin/HEAD"},
+		// bundled short flags and unambiguous long-flag prefixes for --delete
+		{"symbolic-ref", "-qd", "refs/remotes/origin/HEAD"},
+		{"symbolic-ref", "-dq", "refs/remotes/origin/HEAD"},
+		{"symbolic-ref", "--del", "refs/remotes/origin/HEAD"},
+		{"symbolic-ref", "--dele", "refs/remotes/origin/HEAD"},
+		// "--" doesn't hide the write form's second positional from git itself
+		{"symbolic-ref", "HEAD", "--", "refs/heads/pwned"},
 	}
 	spectest.AssertBlockedBatch(t, tool, blocked)
 }
