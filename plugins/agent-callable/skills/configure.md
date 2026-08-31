@@ -86,6 +86,7 @@ GIT_TERMINAL_PROMPT = "0"
 - `write_target` — destination args checked against `writable_dirs`. `"last"` (cp, mv, sed -i), `"all"` (mkdir, touch, tee), or `"after_first"` (xxd in [out]: first positional is read-only input, rest are destinations)
 - `write_flags` — only enforce `write_target` when one of these flags is present (e.g. `-i` for sed)
 - `denied_flags` — block execution outright when any listed flag appears in args, regardless of `allowed = ["*"]`. Exact match (no short-flag prefix). Used to carve out dangerous knobs like `find -exec`/`-delete` or `curl -O`
+- `strip_version_suffix` — strip a trailing `@version` (npm package-spec syntax, e.g. `prettier@3`) from the first token before matching `allowed`. Leaves a scoped package's own leading `@` alone, and leaves the whole token untouched (so it fails the allowlist match) when the part after `@` contains `:` or `/` — that's an npm alias/file/git-URL reference, not a version, and stripping it would let an arbitrary package run under an allowed name
 - `[tool.env]` — env vars applied when the command is allowed
 - `[tool.subcommands]` — second-level subcommand allowlists (keys must be a subset of `allowed`)
 

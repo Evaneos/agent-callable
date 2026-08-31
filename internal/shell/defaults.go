@@ -19,6 +19,8 @@ allowed = ["*"]
 allowed = ["*"]
 [cat]
 allowed = ["*"]
+[comm]
+allowed = ["*"]
 [cut]
 allowed = ["*"]
 [diff]
@@ -296,6 +298,7 @@ allowed = ["*"]
 
 [npx]
 allowed = ["tsc", "eslint", "prettier", "jest", "vitest", "tsx"]
+strip_version_suffix = true
 
 [eslint]
 allowed = ["*"]
@@ -379,7 +382,7 @@ allowed = ["*"]
 allowed = ["*"]
 
 [systemctl]
-allowed = ["is-active", "is-enabled", "list-units", "status"]
+allowed = ["is-active", "is-enabled", "list-units", "status", "show", "list-timers"]
 
 [ip]
 allowed = ["addr", "link", "route"]

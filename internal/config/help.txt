@@ -76,6 +76,14 @@ Fields (inside [toolname])
                                Tokens after "--" are ignored. Useful for carving out
                                dangerous knobs of an otherwise-safe tool (find -exec/
                                -delete, curl -O which writes to CWD).
+  strip_version_suffix (bool)  Strip a trailing "@version" (npm package-spec syntax,
+                               e.g. "prettier@3" -> "prettier") from the first token
+                               before matching it against allowed. A scoped package's
+                               own leading "@" (@angular/cli) is left alone. Nothing
+                               is stripped when the part after "@" contains ":" or
+                               "/" (npm alias/file/git-URL forms like prettier@npm:x,
+                               prettier@file:/tmp/x) so those fail the allowlist
+                               match instead of resolving to an allowed name.
   [toolname.env]       (table)     Environment overrides applied when allowed
   [toolname.subcommands] (table)   Second-level subcommand allowlists
 

@@ -41,15 +41,16 @@ type GlobalConfig struct {
 // ToolConfig represents a tool section in a TOML config file.
 // The Name field is set from the TOML section key, not from the file content.
 type ToolConfig struct {
-	Name           string              `toml:"name"`
-	Mode           string              `toml:"mode"`
-	Allowed        []string            `toml:"allowed"`
-	Subcommands    map[string][]string `toml:"subcommands"`
-	Env            map[string]string   `toml:"env"`
-	FlagsWithValue []string            `toml:"flags_with_value"`
-	WriteTarget    string              `toml:"write_target"`
-	WriteFlags     []string            `toml:"write_flags"`
-	DeniedFlags    []string            `toml:"denied_flags"`
+	Name               string              `toml:"name"`
+	Mode               string              `toml:"mode"`
+	Allowed            []string            `toml:"allowed"`
+	Subcommands        map[string][]string `toml:"subcommands"`
+	Env                map[string]string   `toml:"env"`
+	FlagsWithValue     []string            `toml:"flags_with_value"`
+	WriteTarget        string              `toml:"write_target"`
+	WriteFlags         []string            `toml:"write_flags"`
+	DeniedFlags        []string            `toml:"denied_flags"`
+	StripVersionSuffix bool                `toml:"strip_version_suffix"` // strip a trailing "@version" (npm package-spec syntax) before matching the command against allowed
 }
 
 // ConfigTool is the internal representation after loading.

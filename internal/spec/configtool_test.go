@@ -811,3 +811,82 @@ func TestConfigToolNameAndFlagsMap(t *testing.T) {
 		t.Error("expected FlagsWithValueMap not to contain --other")
 	}
 }
+
+func stripVersionTool(allowed []string) *ConfigToolSpec {
+	return NewConfigTool(ConfigToolOpts{
+		Name:               "npx",
+		Allowed:            allowed,
+		StripVersionSuffix: true,
+	})
+}
+
+func TestStripVersionSuffixAllowsVersionedPackage(t *testing.T) {
+	tool := stripVersionTool([]string{"prettier", "tsc"})
+	res := tool.Check([]string{"prettier@3", "--check", "file.ts"}, RuntimeCtx{})
+	if res.Decision != DecisionAllow {
+		t.Errorf("expected allowed, got denied: %s", res.Reason)
+	}
+}
+
+func TestStripVersionSuffixAllowsLatestAndTags(t *testing.T) {
+	tool := stripVersionTool([]string{"prettier"})
+	for _, cmd := range []string{"prettier@latest", "prettier@next", "prettier@3.2.5"} {
+		res := tool.Check([]string{cmd}, RuntimeCtx{})
+		if res.Decision != DecisionAllow {
+			t.Errorf("%s: expected allowed, got denied: %s", cmd, res.Reason)
+		}
+	}
+}
+
+func TestStripVersionSuffixScopedPackageWithoutVersion(t *testing.T) {
+	tool := stripVersionTool([]string{"@angular/cli"})
+	res := tool.Check([]string{"@angular/cli", "version"}, RuntimeCtx{})
+	if res.Decision != DecisionAllow {
+		t.Errorf("expected allowed, got denied: %s", res.Reason)
+	}
+}
+
+func TestStripVersionSuffixScopedPackageWithVersion(t *testing.T) {
+	tool := stripVersionTool([]string{"@angular/cli"})
+	res := tool.Check([]string{"@angular/cli@17", "version"}, RuntimeCtx{})
+	if res.Decision != DecisionAllow {
+		t.Errorf("expected allowed, got denied: %s", res.Reason)
+	}
+}
+
+func TestStripVersionSuffixStillBlocksUnlistedPackage(t *testing.T) {
+	tool := stripVersionTool([]string{"prettier"})
+	res := tool.Check([]string{"rimraf@5", "-rf", "/"}, RuntimeCtx{})
+	if res.Decision == DecisionAllow {
+		t.Error("expected blocked: rimraf is not in the allowlist")
+	}
+}
+
+// npm's package-spec grammar accepts more than a version after "@": a
+// registry alias, a local path, or a git/tarball URL. None of those are a
+// version, and stripping them would let a different package run under an
+// allowed name.
+func TestStripVersionSuffixDoesNotStripPackageAliases(t *testing.T) {
+	tool := stripVersionTool([]string{"prettier"})
+	blocked := [][]string{
+		{"prettier@npm:rimraf"},
+		{"prettier@npm:cowsay@1.6.0"},
+		{"prettier@file:/tmp/evil"},
+		{"prettier@github:attacker/evil"},
+		{"prettier@../../evil"},
+	}
+	for _, args := range blocked {
+		res := tool.Check(args, RuntimeCtx{})
+		if res.Decision == DecisionAllow {
+			t.Errorf("%v: expected blocked, a package alias/path/URL is not a version", args)
+		}
+	}
+}
+
+func TestStripVersionSuffixDisabledByDefault(t *testing.T) {
+	tool := NewConfigTool(ConfigToolOpts{Name: "npx", Allowed: []string{"prettier"}})
+	res := tool.Check([]string{"prettier@3", "--check", "file.ts"}, RuntimeCtx{})
+	if res.Decision == DecisionAllow {
+		t.Error("expected blocked: strip_version_suffix not enabled for this tool")
+	}
+}

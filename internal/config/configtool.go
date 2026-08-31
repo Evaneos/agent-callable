@@ -6,15 +6,16 @@ import "github.com/evaneos/agent-callable/internal/spec"
 // writableDirs is passed from GlobalConfig for write_target checking.
 func (ct ConfigTool) ToToolSpec(writableDirs []string) *spec.ConfigToolSpec {
 	return spec.NewConfigTool(spec.ConfigToolOpts{
-		Name:           ct.ToolConfig.Name,
-		Allowed:        ct.ToolConfig.Allowed,
-		FlagsWithValue: ct.ToolConfig.FlagsWithValue,
-		Subcommands:    ct.ToolConfig.Subcommands,
-		Env:            ct.ToolConfig.Env,
-		AllowAll:       ct.AllowAll,
-		WriteTarget:    ct.ToolConfig.WriteTarget,
-		WriteFlags:     ct.ToolConfig.WriteFlags,
-		DeniedFlags:    ct.ToolConfig.DeniedFlags,
-		WritableDirs:   writableDirs,
+		Name:               ct.ToolConfig.Name,
+		Allowed:            ct.ToolConfig.Allowed,
+		FlagsWithValue:     ct.ToolConfig.FlagsWithValue,
+		Subcommands:        ct.ToolConfig.Subcommands,
+		Env:                ct.ToolConfig.Env,
+		AllowAll:           ct.AllowAll,
+		WriteTarget:        ct.ToolConfig.WriteTarget,
+		WriteFlags:         ct.ToolConfig.WriteFlags,
+		DeniedFlags:        ct.ToolConfig.DeniedFlags,
+		WritableDirs:       writableDirs,
+		StripVersionSuffix: ct.ToolConfig.StripVersionSuffix,
 	})
 }
