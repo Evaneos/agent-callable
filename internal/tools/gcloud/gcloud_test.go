@@ -111,6 +111,17 @@ func TestGcloudEdgeCases(t *testing.T) {
 		{"config", "list", "--all"},
 		// auth list
 		{"auth", "list"},
+		// Cloud Run: "run" is the product name here, not a write verb
+		{"run", "jobs", "describe", "myjob"},
+		{"run", "jobs", "executions", "list", "--job=myjob"},
+		{"run", "services", "list"},
+		{"run", "services", "describe", "myservice"},
+		// auth application-default: read-only token printers
+		{"auth", "application-default", "print-access-token"},
+		{"auth", "application-default", "print-identity-token"},
+		// Cloud Run behind the alpha/beta release-track prefix
+		{"alpha", "run", "jobs", "describe", "myjob"},
+		{"beta", "run", "services", "list"},
 	}
 	spectest.AssertAllowedBatch(t, tool, allowed)
 
@@ -168,6 +179,26 @@ func TestGcloudEdgeCases(t *testing.T) {
 		// No read-only verb anywhere
 		{"compute", "instances"},
 		{"sql", "databases"},
+		// "run" as a write verb elsewhere (not the root command) stays blocked:
+		// executes an arbitrary CLI inside the Composer environment
+		{"composer", "environments", "run", "myenv", "--location=europe-west1", "--", "dags", "list"},
+		{"alpha", "composer", "environments", "run", "myenv", "--", "dags", "list"},
+		// Cloud Run write operations
+		{"run", "jobs", "execute", "myjob"},
+		{"run", "jobs", "delete", "myjob"},
+		{"run", "services", "update", "myservice"},
+		{"alpha", "run", "jobs", "execute", "myjob"},
+		// a flag not in gcloudGlobalFlagsWithValue leaves its own value in the
+		// token stream ("list") right where a scan-anywhere check would read
+		// it as the verb; checking the verb's own known position must not be
+		// fooled by it
+		{"run", "jobs", "execute", "myjob", "--region", "list"},
+		{"alpha", "run", "jobs", "execute", "myjob", "--region", "list"},
+		{"run", "services", "update-traffic", "mysvc", "--region", "list"},
+		// auth application-default writes
+		{"auth", "application-default", "login"},
+		{"auth", "application-default", "revoke"},
+		{"auth", "application-default", "set-quota-project", "myproj"},
 	}
 	spectest.AssertBlockedBatch(t, tool, blocked)
 }

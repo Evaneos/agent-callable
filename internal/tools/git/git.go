@@ -126,6 +126,32 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 			return spec.Deny("git switch with force/-C not allowed")
 		}
 		return spec.Allow()
+	case "reset":
+		// Allowlist of flags rather than blacklist: git accepts unambiguous
+		// abbreviations of long flags (`--har` for `--hard`), so a blacklist
+		// of exact tokens like "--hard" can't reliably catch every spelling.
+		// Only the mode flags that leave the working tree untouched (no mode
+		// flag = mixed default, or --soft/--mixed explicitly) are allowed;
+		// --hard/--merge/--keep modify tracked files on disk.
+		for i := 0; i < len(args); i++ {
+			a := args[i]
+			if a == "--" {
+				break
+			}
+			if !strings.HasPrefix(a, "-") {
+				continue
+			}
+			if gitGlobalFlagsWithValue[a] {
+				i++
+				continue
+			}
+			switch a {
+			case "-q", "--quiet", "-p", "--patch", "-N", "--intent-to-add", "--soft", "--mixed":
+				continue
+			}
+			return spec.Deny(fmt.Sprintf("git reset flag %q not allowed (non-destructive forms only: no mode flag, --soft, or --mixed)", a))
+		}
+		return spec.Allow()
 	case "add", "mv":
 		return spec.Allow()
 	case "commit", "revert", "cherry-pick":

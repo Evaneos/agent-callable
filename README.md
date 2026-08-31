@@ -110,15 +110,15 @@ Out of the box, agent-callable ships with built-in filters for 12+ CLI tools. Ea
 <summary><strong>Built-in tools</strong> (click to expand)</summary>
 
 - **kubectl** — read-only commands, blocks `apply/delete/edit/patch`, filters out secret content
-- **git** — investigation + local writes (clone/fetch/checkout/add/commit/mv/rm), blocks remote writes and force flags
-- **gh** — read-only + clone/checkout, blocks PR create/merge, issue mutations
+- **git** — investigation + local writes (clone/fetch/checkout/add/commit/mv/rm), non-destructive `reset` forms (no flag, `--soft`, `--mixed`), blocks remote writes and force flags
+- **gh** — read-only + clone/checkout, blocks PR create/merge, issue mutations; `api graphql` is checked by GraphQL operation type (blocks `mutation`/`subscription` and `operationName`), not by the REST write-method heuristic
 - **docker** — inspection + `pull` + `run` with restrictions (no `--privileged`, no host network/pid/ipc, RW mounts only under `writable_dirs`)
 - **docker-compose** — inspection only (`ps/logs/config/images`)
 - **flux** — `version`, `get ...`, `logs`
 - **pulumi** — info + `preview` (auto-injects `--non-interactive`), blocks `--show-secrets`
 - **helm** — read-only (`list/status/history/get/show/template/lint/search`)
 - **kustomize** — `build` + `cfg` read-only
-- **gcloud** — conservative allowlist (list/describe/`get-*`/`list-*`/search/show/read/logs/tail/wait)
+- **gcloud** — conservative allowlist (list/describe/`get-*`/`list-*`/search/show/read/logs/tail/wait); Cloud Run (`run <resource> <verb>`, including behind `alpha`/`beta`) follows the same read-only-verb scan; `auth application-default` restricted to `print-access-token`/`print-identity-token`
 - **npm** — read-only + `install/ci` with `--ignore-scripts` + `run` restricted to safe scripts (test, lint, build, etc.)
 - **kubectx**, **kubectl-crossplane**, **krew**, **chainsaw** — read-only
 - **bash**, **sh** — shell interpreter wrappers: only `-c <expr>` form allowed; the inner expression is recursively validated against the same policy, with `cd`-aware resolution of relative write destinations
@@ -130,7 +130,7 @@ Beyond built-ins, default TOML configs add:
 
 - **Text processing** — `sed`, `yq` with conditional write checking (`-i` triggers `writable_dirs`)
 - **Cloud & CI/CD** — `gsutil` read-only (`ls/cat/stat`, `acl get`, `lifecycle get`, etc.), `terraform` (plan/validate/show), `fly` (Concourse, read-only)
-- **TypeScript** — `tsc`, `eslint` (`--fix` triggers `writable_dirs`), `prettier` (`--write` triggers `writable_dirs`)
+- **TypeScript** — `tsc`, `eslint` (`--fix` triggers `writable_dirs`), `prettier` (`--write` triggers `writable_dirs`), `npx` restricted to a package allowlist (`strip_version_suffix` allows `prettier@3` etc.)
 - **Go** — `gofmt`/`goimports` (`-w` triggers `writable_dirs`), `go` (test/build/vet/mod/...), `staticcheck`, `deadcode`, `golangci-lint` (read-only: `run`, `linters`, `cache`, `config`), `govulncheck`
 - **Python** — `ruff` (`--fix` triggers `writable_dirs`), `uv` (`run` restricted to safe commands like pytest/mypy/ruff), `uvx` (same allowlist as `uv run`), `ty`, `pytest`
 - And many more (filesystem, network, system info, etc.) — see `agent-callable --list-tools`
@@ -177,6 +177,8 @@ flags_with_value = ["-e", "-f", "--expression", "--file"]
 `write_flags` makes `write_target` conditional: the check is only enforced when one of the listed flags is present. Without the flag, the command runs freely (read-only mode). Short flags match by prefix (`-i` matches `-i.bak`), long flags match exactly or with `=` (`--fix` matches `--fix=true`).
 
 `denied_flags` blocks execution outright when any listed flag appears in the command, regardless of `allowed = ["*"]`. Useful for carving out dangerous knobs of an otherwise-safe tool (e.g. `find -exec`/`-delete`, `curl -O` which writes to CWD with a filename derived from the URL). Matching is exact for both short and long flags — `-exec` does not match `-execdir`. Long flags also match `--flag=value`. Tokens after `--` are ignored.
+
+`strip_version_suffix = true` strips a trailing `@<version>` (npm package-spec syntax, e.g. `prettier@3` → `prettier`) from the first token before matching it against `allowed`. A scoped package's own leading `@` (`@angular/cli`) is left alone. To avoid letting an arbitrary package run under an allowed name, nothing is stripped when the part after `@` contains `:` or `/` — that covers npm's other package-spec forms (`prettier@npm:rimraf`, `prettier@file:/tmp/x`, `prettier@github:user/evil`), which aren't a version and are left as-is to fail the allowlist match. Used by `[npx]` in the default TypeScript config.
 
 Built-in tools always take priority over config files. User configs can also use `mode = "extend"` to add subcommands to built-in tools without replacing their custom logic (see `agent-callable --help-config`).
 

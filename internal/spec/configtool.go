@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 )
 
 // Valid values for ConfigToolOpts.WriteTarget.
@@ -16,30 +17,32 @@ const (
 // ConfigToolOpts contains the parameters needed to build a ConfigToolSpec.
 // Uses basic Go types so callers don't depend on TOML structs.
 type ConfigToolOpts struct {
-	Name           string
-	Allowed        []string
-	FlagsWithValue []string
-	Subcommands    map[string][]string
-	Env            map[string]string
-	AllowAll       bool
-	WriteTarget    string   // "last", "all", "after_first", or "" (no write-target check)
-	WriteFlags     []string // flags that trigger write_target checking (e.g. "--fix", "-i")
-	DeniedFlags    []string // flags that block execution outright (e.g. "-exec", "-delete", "-O")
-	WritableDirs   []string // from GlobalConfig
+	Name               string
+	Allowed            []string
+	FlagsWithValue     []string
+	Subcommands        map[string][]string
+	Env                map[string]string
+	AllowAll           bool
+	WriteTarget        string   // "last", "all", "after_first", or "" (no write-target check)
+	WriteFlags         []string // flags that trigger write_target checking (e.g. "--fix", "-i")
+	DeniedFlags        []string // flags that block execution outright (e.g. "-exec", "-delete", "-O")
+	WritableDirs       []string // from GlobalConfig
+	StripVersionSuffix bool     // strip a trailing "@version" (npm package-spec syntax, e.g. "prettier@3") before matching the command against Allowed
 }
 
 // ConfigToolSpec implements ToolSpec from a config-driven tool definition.
 type ConfigToolSpec struct {
-	name           string
-	env            map[string]string
-	allowAll       bool
-	allowedSet     map[string]bool
-	flagsWithValue map[string]bool
-	subcommands    map[string][]string
-	writeTarget    string
-	writeFlags     []string // preserved as slice for prefix matching on short flags
-	deniedFlags    []string
-	writableDirs   []string
+	name               string
+	env                map[string]string
+	allowAll           bool
+	allowedSet         map[string]bool
+	flagsWithValue     map[string]bool
+	subcommands        map[string][]string
+	writeTarget        string
+	writeFlags         []string // preserved as slice for prefix matching on short flags
+	deniedFlags        []string
+	writableDirs       []string
+	stripVersionSuffix bool
 }
 
 // NewConfigTool creates a ToolSpec from basic Go parameters.
@@ -53,17 +56,35 @@ func NewConfigTool(opts ConfigToolOpts) *ConfigToolSpec {
 		flags[f] = true
 	}
 	return &ConfigToolSpec{
-		name:           opts.Name,
-		env:            opts.Env,
-		allowAll:       opts.AllowAll,
-		allowedSet:     allowed,
-		flagsWithValue: flags,
-		subcommands:    opts.Subcommands,
-		writeTarget:    opts.WriteTarget,
-		writeFlags:     opts.WriteFlags,
-		deniedFlags:    opts.DeniedFlags,
-		writableDirs:   opts.WritableDirs,
+		name:               opts.Name,
+		env:                opts.Env,
+		allowAll:           opts.AllowAll,
+		allowedSet:         allowed,
+		flagsWithValue:     flags,
+		subcommands:        opts.Subcommands,
+		writeTarget:        opts.WriteTarget,
+		writeFlags:         opts.WriteFlags,
+		deniedFlags:        opts.DeniedFlags,
+		writableDirs:       opts.WritableDirs,
+		stripVersionSuffix: opts.StripVersionSuffix,
 	}
+}
+
+// stripVersionSuffixFrom removes a trailing "@version" from an npm-style
+// package spec (e.g. "prettier@3" -> "prettier"). A leading "@" (scoped
+// package, e.g. "@angular/cli") is not itself a version separator, and
+// neither is a "/" or ":" after the last "@": that's npm's syntax for a
+// git/tarball/local-path/registry-alias reference (e.g. "prettier@npm:x",
+// "prettier@file:/tmp/x"), left untouched.
+func stripVersionSuffixFrom(pkg string) string {
+	idx := strings.LastIndex(pkg, "@")
+	if idx <= 0 {
+		return pkg
+	}
+	if strings.ContainsAny(pkg[idx+1:], ":/") {
+		return pkg
+	}
+	return pkg[:idx]
 }
 
 func (t *ConfigToolSpec) Name() string { return t.name }
@@ -98,6 +119,9 @@ func (t *ConfigToolSpec) Check(args []string, _ RuntimeCtx) Result {
 	cmd := NthNonFlag(args, 1, t.flagsWithValue)
 	if cmd == "" {
 		return Deny(fmt.Sprintf("%s: subcommand not found", t.name))
+	}
+	if t.stripVersionSuffix {
+		cmd = stripVersionSuffixFrom(cmd)
 	}
 
 	if !t.allowedSet[cmd] {

@@ -46,6 +46,14 @@ func TestGitAllowlistBasic(t *testing.T) {
 		{"check-ref-format", "--branch", "main"},
 		{"symbolic-ref", "refs/remotes/origin/HEAD"},
 		{"symbolic-ref", "-q", "HEAD"},
+		// reset: forms that don't touch the working tree
+		{"reset"},
+		{"reset", "HEAD~1"},
+		{"reset", "--soft", "HEAD~1"},
+		{"reset", "--mixed", "HEAD~1"},
+		{"reset", "-q", "HEAD~1"},
+		{"reset", "-p"},
+		{"reset", "--", "file.go"},
 		// Config read-only
 		{"config", "--list"},
 		{"config", "-l"},
@@ -222,10 +230,13 @@ func TestGitEdgeCases(t *testing.T) {
 		// rebase (not allowed at all)
 		{"rebase", "--onto", "main"},
 		{"rebase", "-i", "HEAD~3"},
-		// reset (not allowed)
-		{"reset", "HEAD~1"},
-		{"reset", "--soft", "HEAD~1"},
-		{"reset", "--mixed", "HEAD~1"},
+		// reset with a mode flag that touches the working tree
+		{"reset", "--merge", "HEAD~1"},
+		{"reset", "--keep", "HEAD~1"},
+		// reset: unambiguous abbreviations of --hard/--merge git itself accepts
+		{"reset", "--har"},
+		{"reset", "--mer", "HEAD~1"},
+		{"reset", "--unknown-flag", "HEAD~1"},
 		// rm with force
 		{"rm", "-f", "file.go"},
 		{"rm", "--force", "-r", "dir/"},

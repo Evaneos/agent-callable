@@ -105,7 +105,22 @@ func TestGHEdgeCases(t *testing.T) {
 		{"api", "/repos/X/Y", "--method", "GET"},
 		// api without method (defaults to GET)
 		{"api", "/repos/X/Y/pulls"},
-		// Note: "gh api graphql -f query=..." is blocked by -f (acceptable false positive).
+		// api graphql: query operation via -f/-F, not a REST write
+		{"api", "graphql", "-f", "query=query { viewer { login } }"},
+		{"api", "graphql", "-F", "query=query { viewer { login } }"},
+		{"api", "graphql", "--raw-field", "query=query { viewer { login } }"},
+		{"api", "graphql", "--raw-field=query=query { viewer { login } }"},
+		{"api", "graphql", "-f", "owner=foo", "-f", "query=query { viewer { login } }"},
+		{"api", "graphql", "-f", "query=  query { viewer { login } }"},
+		{"api", "graphql", "-f", "query=Query { viewer { login } }"}, // case-insensitive "query" keyword, not "mutation"
+		// "Mutation" as part of a longer identifier isn't the operation keyword
+		{"api", "graphql", "-f", "query=query { addComment { clientMutationId } }"},
+		// explicit method matching what graphql actually sends
+		{"api", "graphql", "-X", "POST", "-f", "query=query { viewer { login } }"},
+		// --preview value doesn't get mistaken for the endpoint positional
+		{"api", "--preview", "nebula-preview", "/repos/X/Y"},
+		// last -X wins (matches real gh/HTTP client behavior)
+		{"api", "/repos/X/Y", "-X", "DELETE", "-X", "GET"},
 		// search variants
 		{"search", "issues", "is:open"},
 		{"search", "prs", "author:me"},
@@ -119,7 +134,12 @@ func TestGHEdgeCases(t *testing.T) {
 
 	// === BLOCKED edge cases ===
 	blocked := [][]string{
-		// api with write-implying flags
+		// api with write-implying flags, including forms glued to the flag
+		// itself (pflag accepts these; a scan for the bare flag token misses them)
+		{"api", "/repos/X/Y", "--field=key=value"},
+		{"api", "/repos/X/Y", "--raw-field=key=value"},
+		{"api", "/repos/X/Y", "-fkey=value"},
+		{"api", "/repos/X/Y", "-Fkey=value"},
 		{"api", "/repos/X/Y", "--field", "key=value"},
 		{"api", "/repos/X/Y", "-F", "key=value"},
 		{"api", "/repos/X/Y", "--input=file.json"},
@@ -132,6 +152,28 @@ func TestGHEdgeCases(t *testing.T) {
 		{"api", "/repos/X/Y", "-X", "PATCH"},
 		{"api", "/repos/X/Y", "-XPOST"},
 		{"api", "/repos/X/Y", "--method=DELETE"},
+		// api graphql: mutation operation, --input, or unreadable/missing query
+		{"api", "graphql", "-f", "query=mutation { addComment(input: {}) { clientMutationId } }"},
+		{"api", "graphql", "-F", "query=Mutation { addComment(input: {}) { clientMutationId } }"},
+		{"api", "graphql", "--raw-field=query=mutation { addComment(input: {}) { clientMutationId } }"},
+		{"api", "graphql", "-f", "query=@query.graphql"},
+		{"api", "graphql", "--input", "body.json"},
+		{"api", "graphql", "-f", "owner=foo"},
+		{"api", "graphql"},
+		// mutation keyword hidden behind a leading comment, fragment, or comma
+		{"api", "graphql", "-f", "query=# just a comment\nmutation { addComment(input: {}) { clientMutationId } }"},
+		{"api", "graphql", "-f", "query=fragment F on X{a} mutation{addComment(input:{}){clientMutationId}}"},
+		{"api", "graphql", "-f", "query=,mutation{addComment(input:{}){clientMutationId}}"},
+		// operationName can select a different (mutating) operation than the
+		// one the "query" field's text was reviewed against
+		{"api", "graphql", "-f", "query=query A{viewer{login}} mutation B{addComment(input:{}){clientMutationId}}", "-f", "operationName=B"},
+		{"api", "graphql", "-f", "query=query{viewer{login}}", "-f", "operationName=anything"},
+		// -X/--preview value "graphql" must not be mistaken for the endpoint:
+		// the real endpoint here is a REST path with a write method/field
+		{"api", "-X", "graphql", "/repos/X/Y", "-X", "DELETE", "-f", "query=query{viewer{login}}"},
+		{"api", "--preview", "graphql", "/repos/X/Y/issues/comments/1", "-X", "DELETE"},
+		// explicit non-GET/POST method on the real graphql endpoint
+		{"api", "graphql", "-X", "DELETE", "-f", "query=query { viewer { login } }"},
 		// pr write operations
 		{"pr", "merge", "123"},
 		{"pr", "close", "123"},

@@ -33,12 +33,27 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 		return res
 	}
 
+	cmd := spec.NthNonFlag(args, 1, gcloudGlobalFlagsWithValue)
+
 	// Block common write verbs when they appear as a non-flag token.
-	if spec.ContainsAnyNonFlag(args, gcloudGlobalFlagsWithValue, "create", "delete", "update", "set", "unset", "enable", "disable", "deploy", "run", "start", "stop", "restart", "rollback", "apply", "add-iam-policy-binding", "remove-iam-policy-binding", "set-iam-policy", "reset", "move", "insert", "import", "export", "patch", "remove", "resize", "suspend", "resume") {
+	if spec.ContainsAnyNonFlag(args, gcloudGlobalFlagsWithValue, "create", "delete", "update", "set", "unset", "enable", "disable", "deploy", "start", "stop", "restart", "rollback", "apply", "add-iam-policy-binding", "remove-iam-policy-binding", "set-iam-policy", "reset", "move", "insert", "import", "export", "patch", "remove", "resize", "suspend", "resume") {
 		return spec.Deny("potentially destructive gcloud command (write verb detected)")
 	}
-
-	cmd := spec.NthNonFlag(args, 1, gcloudGlobalFlagsWithValue)
+	// "run" is a destructive verb (e.g. `composer environments run ENV -- <cli>`
+	// executes an arbitrary command inside the environment) everywhere except
+	// as the root command (`gcloud run <resource> <verb>`, optionally behind
+	// the "alpha"/"beta" release-track prefix), where it's the Cloud Run
+	// product name rather than a verb.
+	runRoot := cmd
+	if cmd == "alpha" || cmd == "beta" {
+		runRoot = spec.NthNonFlag(args, 2, gcloudGlobalFlagsWithValue)
+	}
+	if runRoot != "run" && spec.ContainsAnyNonFlag(args, gcloudGlobalFlagsWithValue, "run") {
+		return spec.Deny("potentially destructive gcloud command (write verb detected)")
+	}
+	if runRoot == "run" {
+		return checkCloudRun(args, cmd)
+	}
 
 	// Allowed roots.
 	switch cmd {
@@ -55,6 +70,15 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 		if sub == "list" {
 			return spec.Allow()
 		}
+		if sub == "application-default" {
+			// print-access-token/print-identity-token only print a token
+			// (read-only); login/revoke/set/etc. write local ADC credentials.
+			adcSub := spec.NthNonFlag(args, 3, gcloudGlobalFlagsWithValue)
+			if adcSub == "print-access-token" || adcSub == "print-identity-token" {
+				return spec.Allow()
+			}
+			return spec.Deny(fmt.Sprintf("gcloud auth application-default %q not allowed", adcSub))
+		}
 		return spec.Deny(fmt.Sprintf("gcloud auth %q not allowed", sub))
 	}
 
@@ -62,6 +86,26 @@ func (t *Tool) Check(args []string, _ spec.RuntimeCtx) spec.Result {
 	tokens := spec.AllNonFlags(args, gcloudGlobalFlagsWithValue)
 	for i := len(tokens) - 1; i >= 0; i-- {
 		if isVerbAllowed(tokens[i]) {
+			return spec.Allow()
+		}
+	}
+	return spec.Deny(fmt.Sprintf("no read-only verb detected in: gcloud %s", strings.Join(tokens, " ")))
+}
+
+// checkCloudRun validates `gcloud [alpha|beta] run <resource> <verb>` and
+// the one nested shape `run jobs executions <verb>`. The verb is checked at
+// its known position rather than by scanning every token: an unrecognized
+// flag with a separate value (not in gcloudGlobalFlagsWithValue) leaves that
+// value in the token stream, and a scan-anywhere check would treat a value
+// that happens to read "list" as the verb.
+func checkCloudRun(args []string, cmd string) spec.Result {
+	tokens := spec.AllNonFlags(args, gcloudGlobalFlagsWithValue)
+	runIdx := 0
+	if cmd == "alpha" || cmd == "beta" {
+		runIdx = 1
+	}
+	for _, i := range []int{runIdx + 2, runIdx + 3} {
+		if i < len(tokens) && isVerbAllowed(tokens[i]) {
 			return spec.Allow()
 		}
 	}
