@@ -59,7 +59,7 @@ GoReleaser runs in CI (GitHub Actions) on tag push — do not run locally.
 
 ## Dev workflow
 
-- **Go**: Go 1.25+ (see `go.mod`).
+- **Go**: Go 1.27+ (see `go.mod`).
 - **Local build**: `make build` or `make install`
 - **Tests**: `make test`
 - **Format / modules**: `make fmt`, `make tidy`
