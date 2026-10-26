@@ -1,13 +1,11 @@
 module github.com/evaneos/agent-callable
 
-go 1.25
+go 1.27
 
-require golang.org/x/term v0.32.0
-
-require golang.org/x/sys v0.33.0
-
-require github.com/BurntSushi/toml v1.6.0
-
-require mvdan.cc/sh/v3 v3.12.0
-
-require github.com/Evaneos/kubectl-readonly v0.5.1
+require (
+	github.com/BurntSushi/toml v1.6.0
+	github.com/Evaneos/kubectl-readonly v0.7.1
+	golang.org/x/sys v0.49.0
+	golang.org/x/term v0.47.0
+	mvdan.cc/sh/v3 v3.14.1
+)

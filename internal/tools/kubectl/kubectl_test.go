@@ -95,6 +95,8 @@ func TestSecretsValuesBlocked(t *testing.T) {
 		{"get", "pods,secrets", "-o", "yaml"},
 		{"get", "secrets", "-o=yaml"},
 		{"get", "secret/my-secret", "--output", "json"},
+		{"diff", "-f", "x.yaml", "--show-secrets"},
+		{"diff", "-f", "x.yaml", "--show-secrets=true"},
 	}
 	spectest.AssertBlockedBatch(t, tool, tests)
 }
