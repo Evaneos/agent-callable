@@ -10,6 +10,7 @@ For a runtime usage example in another project, see `SAMPLE_CLAUDE.md`.
 - `agent-callable` is a **deny-by-default** command filter designed to be **pre-approvable** in an LLM agent's allowlist.
 - Goal: reduce the surface of **accidental side effects** from an agent (push/PR/apply/destroy/etc.).
 - This is a best-effort filter, not a security boundary. It offers no guarantee against intentional or creative bypass.
+- Consequence for hardening: fix the confusions an LLM makes without intent (a real GraphQL query passed as `-f query=`, a pasted `@npm:` alias). Stop as soon as a bypass needs a deliberately contrived construction (a dangerous flag hidden inside a short-flag bundle, parse-options abuse): no innocent command looks like that.
 
 ## Policy principles (to follow in code)
 
